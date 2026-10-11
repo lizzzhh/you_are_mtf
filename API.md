@@ -376,8 +376,13 @@ Authorization: Bearer <adminToken>
 **请求 Body：**
 
 ```json
-{ "password": "..." }
+{ "password": "...", "turnstileToken": "0.xxxx" }
 ```
+
+| 字段             | 类型   | 必填 | 说明                                                    |
+| ---------------- | ------ | ---- | ------------------------------------------------------- |
+| `password`       | string | 是   | 超级管理员密码或审核员密码                              |
+| `turnstileToken` | string | 条件 | 服务端配置了 `TURNSTILE_SECRET_KEY` 时必填（防暴力破解） |
 
 **成功 200：**
 
@@ -399,10 +404,11 @@ Authorization: Bearer <adminToken>
 | `identity`   | 显示名：超级管理员恒为 `"超级管理员"`；审核员为其 `name`                 |
 | `expiresAt`  | 会话到期时间，签发后 2 小时                                              |
 
-**错误：** `401 PASSWORD_WRONG` / `429 RATE_LIMITED`
+**错误：** `401 PASSWORD_WRONG` / `400 · 502 TURNSTILE_FAILED` / `429 RATE_LIMITED`
 
 **说明：**
 
+- 顺序：限流 → 解析 Body → **Turnstile 校验** → 密码校验。配置了 `TURNSTILE_SECRET_KEY` 时必须携带有效 `turnstileToken`，否则无法尝试密码（防暴力破解）。
 - 先与 `env.ADMIN_PASSWORD` 恒时比较；不匹配再遍历 `reviewers` 表逐一做 PBKDF2 校验。
 - `ADMIN_PASSWORD` 未配置时无法以超级管理员身份登录（仍可用审核员密码登录）。
 - 登录成功写入 `audit_logs`（`action=login`）。

@@ -927,7 +927,7 @@
 
         .form-row input[type="text"],
         .form-row input[type="password"],
-        .form-row input[type="date"],
+        .form-row textarea,
         .rej-box input,
         .admin-login input {
             width: 100%;
@@ -955,41 +955,163 @@
             line-height: 1.6;
         }
 
-        /* ===== 翻车日期：与文本框统一外观，并美化原生日期选择器 ===== */
+        /* ===== 文本框统一最小高度 ===== */
         .form-row input[type="text"],
-        .form-row input[type="password"],
-        .form-row input[type="date"] {
+        .form-row input[type="password"] {
             min-height: 38px;
         }
 
-        .form-row input[type="date"] {
-            cursor: pointer;
+        /* ===== 自定义日期选择器（替代原生 input[type=date]） ===== */
+        .date-field {
+            position: relative;
+        }
+
+        .form-row .date-field input {
+            padding-right: 40px;
             font-variant-numeric: tabular-nums;
             letter-spacing: 0.3px;
         }
 
-        .form-row input[type="date"]::-webkit-calendar-picker-indicator {
+        .date-field-btn {
+            position: absolute;
+            top: 1px;
+            right: 1px;
+            bottom: 1px;
+            width: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: none;
+            border-left: 1px solid var(--border-3);
+            background: transparent;
+            color: var(--text-soft);
             cursor: pointer;
-            padding: 3px;
-            margin-left: 6px;
-            border-radius: 4px;
-            opacity: 0.5;
-            transition: opacity 0.15s ease, background-color 0.15s ease;
+            transition: color 0.15s, background-color 0.15s;
         }
 
-        .form-row input[type="date"]:hover::-webkit-calendar-picker-indicator,
-        .form-row input[type="date"]:focus::-webkit-calendar-picker-indicator {
-            opacity: 1;
-            background-color: var(--surface-2);
+        .date-field-btn:hover {
+            color: var(--text-strong);
+            background: var(--surface-2);
         }
 
-        .form-row input[type="date"]::-webkit-datetime-edit-month-field:focus,
-        .form-row input[type="date"]::-webkit-datetime-edit-day-field:focus,
-        .form-row input[type="date"]::-webkit-datetime-edit-year-field:focus {
+        .date-popover {
+            position: fixed;
+            z-index: 1300;
+            width: 268px;
+            background: var(--surface);
+            border: 1px solid var(--border-3);
+            box-shadow: 0 18px 44px rgba(0, 0, 0, 0.22);
+            padding: 12px;
+            user-select: none;
+        }
+
+        .date-popover[hidden] {
+            display: none;
+        }
+
+        .date-pop-head {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+
+        .date-pop-title {
+            flex: 1;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-strong);
+            letter-spacing: 0.2px;
+        }
+
+        .date-pop-nav {
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            border: 1px solid var(--border-3);
+            background: var(--surface);
+            color: var(--text-mid);
+            font-size: 13px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .date-pop-nav:hover {
             background: var(--surface-2);
             color: var(--text-strong);
-            outline: none;
-            border-radius: 2px;
+        }
+
+        .date-pop-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 2px;
+        }
+
+        .date-pop-grid .dow {
+            text-align: center;
+            font-size: 11px;
+            color: var(--text-faint);
+            padding: 2px 0 4px;
+        }
+
+        .date-cell {
+            height: 30px;
+            padding: 0;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 12.5px;
+            cursor: pointer;
+        }
+
+        .date-cell:hover {
+            background: var(--surface-2);
+            border-color: var(--border-3);
+        }
+
+        .date-cell.other {
+            color: var(--text-faint);
+        }
+
+        .date-cell.today {
+            border-color: var(--border-2);
+            color: var(--text-strong);
+        }
+
+        .date-cell.selected,
+        .date-cell.selected:hover {
+            background: var(--text-strong);
+            border-color: var(--text-strong);
+            color: var(--surface);
+            font-weight: 600;
+        }
+
+        .date-pop-foot {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .date-pop-foot button {
+            flex: 1;
+            padding: 5px 0;
+            border: 1px solid var(--border-3);
+            background: var(--surface);
+            color: var(--text-soft);
+            font-family: inherit;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .date-pop-foot button:hover {
+            background: var(--surface-2);
+            color: var(--text-strong);
         }
 
         .form-hint {
@@ -1799,6 +1921,7 @@
                         <input type="password" id="adminPasswordInput" placeholder="管理密码"
                             autocomplete="current-password" />
                     </div>
+                    <div class="turnstile-wrap" id="adminLoginTurnstile"></div>
                     <div class="form-error" id="adminLoginError"></div>
                     <button class="btn-primary" id="adminLoginBtn">进入后台</button>
                 </div>
@@ -1871,7 +1994,17 @@
                 </div>
                 <div class="form-row">
                     <label>翻车日期 *</label>
-                    <input type="date" id="efCrashDate" />
+                    <div class="date-field">
+                        <input type="text" id="efCrashDate" placeholder="YYYY-MM-DD" inputmode="numeric"
+                            autocomplete="off" maxlength="10" />
+                        <button type="button" class="date-field-btn" data-date-open="efCrashDate" aria-label="打开日历">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <rect x="3" y="5" width="18" height="16" fill="none" stroke="currentColor" stroke-width="1.6" />
+                                <path d="M3 9.5h18M8 3v3.4M16 3v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="form-hint">格式 YYYY-MM-DD，点击右侧图标选择</div>
                 </div>
                 <div class="form-row">
                     <label>头像 URL</label>
@@ -1915,7 +2048,17 @@
                 </div>
                 <div class="form-row">
                     <label>翻车日期 *</label>
-                    <input type="date" id="mfCrashDate" />
+                    <div class="date-field">
+                        <input type="text" id="mfCrashDate" placeholder="YYYY-MM-DD" inputmode="numeric"
+                            autocomplete="off" maxlength="10" />
+                        <button type="button" class="date-field-btn" data-date-open="mfCrashDate" aria-label="打开日历">
+                            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                                <rect x="3" y="5" width="18" height="16" fill="none" stroke="currentColor" stroke-width="1.6" />
+                                <path d="M3 9.5h18M8 3v3.4M16 3v3.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="form-hint">格式 YYYY-MM-DD，点击右侧图标选择</div>
                 </div>
                 <div class="form-row">
                     <label>头像 URL</label>
@@ -1941,6 +2084,9 @@
 
     <!-- toast -->
     <div class="toast" id="toastEl"></div>
+
+    <!-- 自定义日期选择器浮层 -->
+    <div class="date-popover" id="datePopover" hidden></div>
 
     <script>
         (function () {
@@ -2449,6 +2595,8 @@
             let adminReviewersCache = [];
             let adminListReqSeq = 0;
             let mainNeedsReload = false;
+            let adminTurnstileToken = '';
+            let adminTurnstileWidgetId = null;
 
             const $ = id => document.getElementById(id);
             const viewMain = $('viewMain');
@@ -2505,12 +2653,14 @@
             const adminPasswordInput = $('adminPasswordInput');
             const adminLoginBtn = $('adminLoginBtn');
             const adminLoginError = $('adminLoginError');
+            const adminLoginTurnstileEl = $('adminLoginTurnstile');
             const adminTabsEl = $('adminTabs');
             const adminListEl = $('adminList');
             const adminLogoutBtn = $('adminLogoutBtn');
             const adminWho = $('adminWho');
 
             const toastEl = $('toastEl');
+            const datePopoverEl = $('datePopover');
 
             /* ============================================================
                toast
@@ -2980,6 +3130,205 @@
                 }
             }
 
+            /* ---- 后台登录的人机验证 ---- */
+            let adminTurnstileMounting = false;
+            async function mountAdminTurnstile() {
+                if (adminTurnstileWidgetId != null || adminTurnstileMounting) return;
+                adminTurnstileMounting = true;
+                adminTurnstileToken = '';
+                adminLoginTurnstileEl.innerHTML = '';
+                try {
+                    if (!appConfig.turnstileEnabled || !appConfig.turnstileSiteKey) return;
+                    // 视图切换动画期间容器不可见，等待其获得布局后再渲染
+                    for (let i = 0; i < 40 && !adminLoginTurnstileEl.offsetWidth; i++) {
+                        await new Promise(r => setTimeout(r, 50));
+                        if (adminToken) return;
+                    }
+                    if (!adminLoginTurnstileEl.offsetWidth || adminToken || adminTurnstileWidgetId != null) return;
+                    await ensureTurnstileScript();
+                    if (!adminLoginTurnstileEl.offsetWidth || adminToken || adminTurnstileWidgetId != null) return;
+                    adminTurnstileWidgetId = window.turnstile.render(adminLoginTurnstileEl, {
+                        sitekey: appConfig.turnstileSiteKey,
+                        theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+                        callback: t => { adminTurnstileToken = t; },
+                        'expired-callback': () => { adminTurnstileToken = ''; },
+                        'error-callback': () => { adminTurnstileToken = ''; }
+                    });
+                } catch (e) {
+                    adminLoginError.textContent = e.message;
+                } finally {
+                    adminTurnstileMounting = false;
+                }
+            }
+            function resetAdminTurnstile() {
+                adminTurnstileToken = '';
+                if (window.turnstile && adminTurnstileWidgetId != null) {
+                    try { window.turnstile.reset(adminTurnstileWidgetId); } catch (e) { /* 忽略 */ }
+                }
+            }
+
+            /* ============================================================
+               自定义日期选择器（替代原生 input[type=date]）
+               原生日历浮层位置不可控，这里用固定在输入框下方的自绘日历
+               ============================================================ */
+            const DATE_WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+            const datePicker = { anchor: null, view: null, selected: null };
+
+            function pad2(n) { return String(n).padStart(2, '0'); }
+            function fmtDate(y, m, d) { return y + '-' + pad2(m) + '-' + pad2(d); }
+            function parseDateStr(s) {
+                const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || '').trim());
+                if (!m) return null;
+                const y = +m[1], mo = +m[2], d = +m[3];
+                const dt = new Date(Date.UTC(y, mo - 1, d));
+                if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+                return { y, m: mo, d };
+            }
+
+            function openDatePicker(inputEl, anchorEl) {
+                const cur = parseDateStr(inputEl.value);
+                const now = new Date();
+                datePicker.anchor = inputEl;
+                datePicker.selected = cur;
+                datePicker.view = cur ? { y: cur.y, m: cur.m } : { y: now.getFullYear(), m: now.getMonth() + 1 };
+                datePopoverEl.hidden = false;
+                renderDatePicker();
+                positionDatePicker(anchorEl || inputEl);
+            }
+
+            function closeDatePicker() {
+                datePopoverEl.hidden = true;
+                datePicker.anchor = null;
+            }
+
+            function positionDatePicker(anchor) {
+                const r = anchor.getBoundingClientRect();
+                const pw = datePopoverEl.offsetWidth || 268;
+                const ph = datePopoverEl.offsetHeight || 300;
+                const vw = window.innerWidth, vh = window.innerHeight;
+                let left = r.left;
+                let top = r.bottom + 6;
+                if (left + pw > vw - 8) left = Math.max(8, r.right - pw);
+                if (top + ph > vh - 8) top = Math.max(8, r.top - ph - 6);
+                datePopoverEl.style.left = left + 'px';
+                datePopoverEl.style.top = top + 'px';
+            }
+
+            function renderDatePicker() {
+                const y = datePicker.view.y, m = datePicker.view.m;
+                const startDow = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+                const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+                const total = Math.ceil((startDow + daysInMonth) / 7) * 7;
+                const now = new Date();
+                const todayStr = fmtDate(now.getFullYear(), now.getMonth() + 1, now.getDate());
+                const selStr = datePicker.selected
+                    ? fmtDate(datePicker.selected.y, datePicker.selected.m, datePicker.selected.d) : '';
+
+                let cells = '';
+                for (let i = 0; i < total; i++) {
+                    const dt = new Date(Date.UTC(y, m - 1, 1 - startDow + i));
+                    const cy = dt.getUTCFullYear(), cm = dt.getUTCMonth() + 1, cd = dt.getUTCDate();
+                    const ds = fmtDate(cy, cm, cd);
+                    const cls = 'date-cell'
+                        + (cm !== m ? ' other' : '')
+                        + (ds === todayStr ? ' today' : '')
+                        + (ds === selStr ? ' selected' : '');
+                    cells += '<button type="button" class="' + cls + '" data-dp="pick" data-date="' + ds + '">' + cd + '</button>';
+                }
+
+                datePopoverEl.innerHTML =
+                    '<div class="date-pop-head">' +
+                        '<button type="button" class="date-pop-nav" data-dp="prev-year" aria-label="上一年">«</button>' +
+                        '<button type="button" class="date-pop-nav" data-dp="prev" aria-label="上个月">‹</button>' +
+                        '<span class="date-pop-title">' + y + ' 年 ' + m + ' 月</span>' +
+                        '<button type="button" class="date-pop-nav" data-dp="next" aria-label="下个月">›</button>' +
+                        '<button type="button" class="date-pop-nav" data-dp="next-year" aria-label="下一年">»</button>' +
+                    '</div>' +
+                    '<div class="date-pop-grid">' +
+                        DATE_WEEK.map(w => '<span class="dow">' + w + '</span>').join('') +
+                        cells +
+                    '</div>' +
+                    '<div class="date-pop-foot">' +
+                        '<button type="button" data-dp="clear">清 除</button>' +
+                        '<button type="button" data-dp="today">今 天</button>' +
+                    '</div>';
+            }
+
+            function shiftDateMonth(delta) {
+                let m = datePicker.view.m + delta;
+                let y = datePicker.view.y;
+                y += Math.floor((m - 1) / 12);
+                m = ((m - 1) % 12 + 12) % 12 + 1;
+                datePicker.view = { y, m };
+                renderDatePicker();
+            }
+
+            function applyPickedDate(str) {
+                if (datePicker.anchor) datePicker.anchor.value = str;
+                datePicker.selected = parseDateStr(str);
+                closeDatePicker();
+            }
+
+            datePopoverEl.addEventListener('click', function (e) {
+                const btn = e.target.closest('[data-dp]');
+                if (!btn) return;
+                const act = btn.dataset.dp;
+                if (act === 'prev') shiftDateMonth(-1);
+                else if (act === 'next') shiftDateMonth(1);
+                else if (act === 'prev-year') shiftDateMonth(-12);
+                else if (act === 'next-year') shiftDateMonth(12);
+                else if (act === 'pick') applyPickedDate(btn.dataset.date);
+                else if (act === 'clear') applyPickedDate('');
+                else if (act === 'today') {
+                    const n = new Date();
+                    applyPickedDate(fmtDate(n.getFullYear(), n.getMonth() + 1, n.getDate()));
+                }
+            });
+
+            function repositionDatePicker() {
+                if (datePopoverEl.hidden || !datePicker.anchor) return;
+                positionDatePicker(datePicker.anchor.closest('.date-field') || datePicker.anchor);
+            }
+            window.addEventListener('resize', repositionDatePicker);
+            window.addEventListener('scroll', repositionDatePicker, true);
+
+            document.addEventListener('mousedown', function (e) {
+                if (datePopoverEl.hidden) return;
+                if (datePopoverEl.contains(e.target)) return;
+                if (e.target.closest && e.target.closest('.date-field')) return;
+                closeDatePicker();
+            });
+
+            document.addEventListener('click', function (e) {
+                const btn = e.target.closest && e.target.closest('[data-date-open]');
+                if (!btn) return;
+                e.preventDefault();
+                const input = $(btn.dataset.dateOpen);
+                if (!input) return;
+                if (!datePopoverEl.hidden && datePicker.anchor === input) { closeDatePicker(); return; }
+                openDatePicker(input, btn.closest('.date-field') || input);
+            });
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && !datePopoverEl.hidden) {
+                    closeDatePicker();
+                    e.stopImmediatePropagation();
+                }
+            });
+
+            [efCrashDate, mfCrashDate].forEach(function (input) {
+                input.addEventListener('focus', function () {
+                    if (datePopoverEl.hidden || datePicker.anchor !== input) {
+                        openDatePicker(input, input.closest('.date-field') || input);
+                    }
+                });
+                input.addEventListener('input', function () {
+                    let v = this.value.replace(/[^\d-]/g, '');
+                    if (/^\d{8}$/.test(v)) v = v.slice(0, 4) + '-' + v.slice(4, 6) + '-' + v.slice(6);
+                    this.value = v.slice(0, 10);
+                });
+            });
+
             /* ============================================================
                前台 · 提交建议模态（新增 / 修改，走审核）
                ============================================================ */
@@ -3026,6 +3375,7 @@
                 unlockScroll();
                 editModalOpen = false;
                 editCtx.turnstileToken = '';
+                closeDatePicker();
             }
 
             function collectEditValues() {
@@ -3139,6 +3489,7 @@
                 memberModal.classList.remove('active');
                 unlockScroll();
                 memberModalOpen = false;
+                closeDatePicker();
             }
 
             /* 批量导入功能已移除：条目可直接在「条目管理」中逐条增删改。 */
@@ -3229,22 +3580,34 @@
             function renderAdmin() {
                 const logged = !!adminToken;
                 if (!logged && adminLoginView.hidden) {
-                    hideView(adminPanelView, function () { showView(adminLoginView); });
+                    hideView(adminPanelView, function () { showView(adminLoginView); mountAdminTurnstile(); });
                 } else if (logged && adminPanelView.hidden) {
                     hideView(adminLoginView, function () { showView(adminPanelView); });
                 }
                 applyAdminRoleUI();
-                if (logged) loadAdminList();
+                if (logged) {
+                    resetAdminTurnstile();
+                    loadAdminList();
+                } else {
+                    mountAdminTurnstile();
+                }
             }
 
             async function doAdminLogin() {
                 const pw = adminPasswordInput.value;
                 adminLoginError.textContent = '';
                 if (!pw) { adminLoginError.textContent = '请输入密码'; return; }
+                if (appConfig.turnstileEnabled && !adminTurnstileToken) {
+                    adminLoginError.textContent = '请先完成人机验证';
+                    return;
+                }
                 adminLoginBtn.disabled = true;
                 adminLoginBtn.textContent = '验证中…';
                 try {
-                    const data = await apiFetch('/admin/login', { method: 'POST', body: { password: pw } });
+                    const data = await apiFetch('/admin/login', {
+                        method: 'POST',
+                        body: { password: pw, turnstileToken: adminTurnstileToken || '' }
+                    });
                     adminToken = data.adminToken;
                     adminRole = data.role;
                     adminIdentity = data.identity;
@@ -3252,12 +3615,14 @@
                     sessionStorage.setItem('adminRole', adminRole);
                     sessionStorage.setItem('adminIdentity', adminIdentity);
                     adminPasswordInput.value = '';
+                    resetAdminTurnstile();
                     adminTab = 'pending';
                     adminTabsEl.querySelectorAll('.filter-btn').forEach(b =>
                         b.classList.toggle('active', b.dataset.tab === 'pending'));
                     renderAdmin();
                 } catch (err) {
                     adminLoginError.textContent = err.message;
+                    if (err.code === 'TURNSTILE_FAILED') resetAdminTurnstile();
                 } finally {
                     adminLoginBtn.disabled = false;
                     adminLoginBtn.textContent = '进入后台';
@@ -3271,6 +3636,7 @@
                 sessionStorage.removeItem('adminToken');
                 sessionStorage.removeItem('adminRole');
                 sessionStorage.removeItem('adminIdentity');
+                resetAdminTurnstile();
                 if (!silent) toast('已退出后台');
                 renderAdmin();
             }
@@ -3846,6 +4212,7 @@
                 } catch (e) {
                     appConfig = { turnstileEnabled: false, turnstileSiteKey: '' };
                 }
+                if (location.hash === '#/admin' || location.hash === '#admin') mountAdminTurnstile();
             }
 
             window.addEventListener('hashchange', route);

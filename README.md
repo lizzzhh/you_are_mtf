@@ -296,7 +296,7 @@ BASE=https://<your-worker>.workers.dev
 curl -s $BASE/api/config
 curl -s $BASE/api/members
 
-# 2) 登录拿 token（超级管理员）
+# 2) 登录拿 token（超级管理员；服务端配置了 Turnstile 时需追加有效 turnstileToken）
 TOK=$(curl -s $BASE/api/admin/login -X POST \
   -H 'Content-Type: application/json' \
   -d '{"password":"你的超级管理员密码"}' | jq -r .data.adminToken)
@@ -333,7 +333,7 @@ open $BASE/
 
 **Q3：为什么本地不需要过 Turnstile？**
 
-未配置 `TURNSTILE_SECRET_KEY` 时后端跳过人机验证，`GET /api/config` 也会告诉前端 `turnstileEnabled=false`。上线务必配置两把 Turnstile 密钥。
+未配置 `TURNSTILE_SECRET_KEY` 时后端跳过人机验证，`GET /api/config` 也会告诉前端 `turnstileEnabled=false`。上线务必配置两把 Turnstile 密钥。配置后，**后台登录**与**游客提交**都会强制校验（后台登录因此可防暴力破解）。
 
 **Q4：同一个 X 用户翻车多次怎么办？**
 

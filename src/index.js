@@ -433,6 +433,7 @@ async function createSubmission(env, request, ip) {
 async function adminLogin(env, request, ip) {
   await assertRateLimit(env, ip, "admin-login", 5, 60_000);
   const body = await readJson(request);
+  await verifyTurnstile(env, body.turnstileToken, ip);
   const pw = typeof body.password === "string" ? body.password : "";
   if (!pw) throw new ApiError("PASSWORD_WRONG", "密码错误", 401);
 
