@@ -25,6 +25,17 @@ const CORS = {
 
 const ENCODER = new TextEncoder();
 
+/**
+ * 头像反向代理：境外图床（如 pbs.twimg.com）在境内访问受限，
+ * 由 Worker 代为抓取。仅允许下列域名，避免变成开放代理 / SSRF。
+ */
+const AVATAR_PROXY_HOSTS = new Set([
+  "pbs.twimg.com",
+  "abs.twimg.com",
+  "video.twimg.com",
+]);
+const AVATAR_MAX_BYTES = 12 * 1024 * 1024; // 单图上限 12MB
+
 /* =============== 统一响应包 =============== */
 class ApiError extends Error {
   constructor(code, message, status) {
@@ -362,6 +373,70 @@ async function getConfig(env) {
   return OK({
     turnstileEnabled: enabled,
     turnstileSiteKey: env.TURNSTILE_SITE_KEY || "",
+  });
+}
+
+/** GET /api/avatar?u=<encoded> —— 反向代理境外图床图片（返回二进制，非 JSON 包） */
+async function proxyAvatar(request, url) {
+  const raw = url.searchParams.get("u") || "";
+  let target;
+  try {
+    target = new URL(raw);
+  } catch {
+    throw new ApiError("PARAM_INVALID", "无效的图片地址", 400);
+  }
+  if (target.protocol !== "https:" && target.protocol !== "http:")
+    throw new ApiError("PARAM_INVALID", "无效的图片地址", 400);
+  if (!AVATAR_PROXY_HOSTS.has(target.hostname.toLowerCase()))
+    throw new ApiError("FORBIDDEN", "该域名不在可代理范围内", 403);
+
+  const method = request.method.toUpperCase();
+  let upstream;
+  try {
+    upstream = await fetch(target.toString(), {
+      method,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (compatible; you_are_mtf-avatar-proxy/1.0; +https://github.com/lizzzhh/you_are_mtf)",
+        Referer: "https://x.com/",
+        Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      },
+      redirect: "follow",
+      cf: {
+        cacheEverything: true,
+        cacheTtl: 86400,
+        cacheTtlByStatus: { "200-299": 86400, "404": 60, "500-599": 60 },
+      },
+    });
+  } catch {
+    throw new ApiError("UPSTREAM_ERROR", "图片源暂不可用", 502);
+  }
+
+  if (!upstream.ok)
+    return new Response(null, {
+      status: upstream.status === 404 ? 404 : 502,
+      headers: { "Cache-Control": "public, max-age=60", ...CORS },
+    });
+
+  const ctype = upstream.headers.get("Content-Type") || "";
+  if (!/^image\//i.test(ctype))
+    return new Response(null, {
+      status: 415,
+      headers: { "Cache-Control": "public, max-age=60", ...CORS },
+    });
+
+  const len = Number(upstream.headers.get("Content-Length") || 0);
+  if (len && len > AVATAR_MAX_BYTES)
+    throw new ApiError("FILE_TOO_LARGE", "图片过大", 413);
+
+  const headers = new Headers(CORS);
+  headers.set("Content-Type", ctype);
+  if (len) headers.set("Content-Length", String(len));
+  headers.set("Cache-Control", "public, max-age=604800, immutable");
+  headers.set("X-Content-Type-Options", "nosniff");
+  return new Response(method === "HEAD" ? null : upstream.body, {
+    status: 200,
+    headers,
   });
 }
 
@@ -795,6 +870,13 @@ export default {
       /* ---------- 公开接口 ---------- */
       if (seg[1] === "config" && seg.length === 2 && method === "GET")
         return await getConfig(env);
+
+      if (
+        seg[1] === "avatar" &&
+        seg.length === 2 &&
+        (method === "GET" || method === "HEAD")
+      )
+        return await proxyAvatar(request, url);
 
       if (seg[1] === "members" && seg.length === 2 && method === "GET")
         return await listMembers(env);

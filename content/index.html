@@ -2163,6 +2163,16 @@
                     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
                 ));
             }
+            /* 境外图床（pbs.twimg.com 等）在境内访问受限，统一改走 Worker 反向代理 */
+            const AVATAR_PROXY_HOSTS = ['pbs.twimg.com', 'abs.twimg.com', 'video.twimg.com'];
+            function displayAvatarUrl(url) {
+                if (!url) return '';
+                let u;
+                try { u = new URL(url, location.origin); } catch (e) { return url; }
+                if (u.origin === location.origin) return url;
+                if (AVATAR_PROXY_HOSTS.indexOf(u.hostname.toLowerCase()) === -1) return url;
+                return API_BASE + '/avatar?u=' + encodeURIComponent(url);
+            }
             function fmtTime(iso) {
                 try { return new Date(iso).toLocaleString('zh-CN', { hour12: false }); }
                 catch (e) { return iso || ''; }
@@ -2835,7 +2845,7 @@
                     let cardsHtml = '';
                     list.forEach(m => {
                         const avatarContent = m.avatar
-                            ? '<img src="' + esc(m.avatar) + '" alt="' + esc(m.name) + '" loading="lazy" />'
+                            ? '<img src="' + esc(displayAvatarUrl(m.avatar)) + '" alt="' + esc(m.name) + '" loading="lazy" />'
                             : esc(String(m.name || '?').charAt(0));
                         cardsHtml +=
                             '<div class="card-thumb" data-id="' + m.id + '">' +
@@ -2874,7 +2884,7 @@
 
             function fillExpandCard(member) {
                 const avatarContent = member.avatar
-                    ? '<img src="' + esc(member.avatar) + '" alt="' + esc(member.name) + '" />'
+                    ? '<img src="' + esc(displayAvatarUrl(member.avatar)) + '" alt="' + esc(member.name) + '" />'
                     : esc(String(member.name || '?').charAt(0));
                 expandAvatar.innerHTML = avatarContent;
                 expandName.textContent = member.name;
@@ -3844,7 +3854,7 @@
                 } else {
                     sorted.forEach(m => {
                         const avatarContent = m.avatar
-                            ? '<img src="' + esc(m.avatar) + '" alt="" loading="lazy" />'
+                            ? '<img src="' + esc(displayAvatarUrl(m.avatar)) + '" alt="" loading="lazy" />'
                             : esc(String(m.name || '?').charAt(0));
                         html +=
                             '<div class="member-admin-card" data-member-id="' + m.id + '">' +

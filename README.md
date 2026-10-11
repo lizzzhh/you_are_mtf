@@ -54,6 +54,7 @@
 - ✅ 条目列表展示：按月分组、标签筛选、点击卡片展开详情
 - ✅ 展开卡片显示 X 用户名与「在 X 查看」跳转按钮
 - ✅ 任何游客均可提交「新增条目 / 修改条目」建议
+- ✅ 头像自动反向代理：`pbs.twimg.com` 等境外图床在境内访问受限，自动改走 Worker 代理加载
 - ✅ Cloudflare Turnstile 人机验证（未配置时自动跳过，便于本地开发）
 - ✅ 表单内置「如何用 F12 获取头像链接」提示
 
@@ -198,6 +199,7 @@ npx wrangler deploy
 | 方法 | 路径 | 说明 | 限流 |
 | --- | --- | --- | --- |
 | GET | `/api/config` | 前端获取 Turnstile 开关与站点公钥 | — |
+| GET | `/api/avatar?u=` | 头像反向代理：回源 `pbs.twimg.com` 等被墙图床（返回图片二进制，非 JSON） | — |
 | GET | `/api/members` | 获取全部条目（空库返回 `[]`） | — |
 | POST | `/api/submissions` | 提交新增 / 修改建议（需 Turnstile，若已配置） | 10 次/小时/IP |
 

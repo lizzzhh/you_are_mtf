@@ -76,7 +76,7 @@ POST /admin/login ──> adminToken（role 自动识别）
 
 ### 2.1 统一响应包
 
-所有接口（包括错误）都返回 JSON 包装结构，`ok` 字段为总开关：
+除 `GET /api/avatar`（直接返回图片二进制，见 4.2）外，所有接口（包括错误）都返回 JSON 包装结构，`ok` 字段为总开关：
 
 ```jsonc
 // 成功
@@ -278,7 +278,37 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.2 GET /api/members — 翻车条目列表
+### 4.2 GET /api/avatar — 头像反向代理
+
+境外图床（`pbs.twimg.com` 等）在境内访问受限。前端渲染头像时，会把这类地址改写成 `GET /api/avatar?u=<原始图片地址>`，由 Worker 代为回源抓取。
+
+- **权限：** 公开
+- **查询参数：**
+
+| 参数 |  类型  | 必填 | 说明                        |
+| ---- | :----: | :--: | --------------------------- |
+| `u`  | string |  ✓   | 原始图片地址（需 URL 编码） |
+
+**允许代理的域名（白名单，防止变成开放代理 / SSRF）：** `pbs.twimg.com`、`abs.twimg.com`、`video.twimg.com`
+
+**成功 200：** 直接返回图片二进制（`Content-Type: image/*` 透传，长缓存）。**这是本 API 唯一的非 JSON 响应**，不带 `{ ok, data }` 包装。
+
+**响应头：** `Cache-Control: public, max-age=604800, immutable`、`X-Content-Type-Options: nosniff`。
+
+**错误：**
+
+| 错误码           | 状态 | 说明                    |
+| ---------------- | ---- | ----------------------- |
+| `PARAM_INVALID`  | 400  | `u` 缺失或不是合法 URL  |
+| `FORBIDDEN`      | 403  | 域名不在白名单内        |
+| `FILE_TOO_LARGE` | 413  | 回源图片超过 12MB       |
+| `UPSTREAM_ERROR` | 502  | 图床不可达              |
+
+**说明：** 上游非 `image/*` 返回 `415`；上游 404 原样返回 `404`，其余非 2xx 统一 `502`。支持的域名写死在 Worker 内，前端仅在域名命中白名单时才改写地址。
+
+---
+
+### 4.3 GET /api/members — 翻车条目列表
 
 获取全部已生效条目。前台时间线数据源。
 
@@ -299,7 +329,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.3 POST /api/submissions — 提交新增 / 修改建议
+### 4.4 POST /api/submissions — 提交新增 / 修改建议
 
 任何人可提交，进入待审队列。**所有条目变更都必须经过审核。**
 
@@ -367,7 +397,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.4 POST /api/admin/login — 后台登录（统一入口）
+### 4.5 POST /api/admin/login — 后台登录（统一入口）
 
 同一个入口自动识别**超级管理员**或**审核员**。
 
@@ -415,7 +445,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.5 GET /api/admin/me — 当前会话
+### 4.6 GET /api/admin/me — 当前会话
 
 - **权限：** 审核员 +
 
@@ -429,7 +459,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.6 GET /api/admin/submissions — 审核记录列表
+### 4.7 GET /api/admin/submissions — 审核记录列表
 
 - **权限：** 审核员 +
 
@@ -454,7 +484,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.7 POST /api/admin/submissions/{id}/approve — 通过审核
+### 4.8 POST /api/admin/submissions/{id}/approve — 通过审核
 
 - **权限：** 审核员 +
 - **Body：** 无
@@ -483,7 +513,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.8 POST /api/admin/submissions/{id}/reject — 驳回
+### 4.9 POST /api/admin/submissions/{id}/reject — 驳回
 
 - **权限：** 审核员 +
 
@@ -511,7 +541,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.9 GET /api/admin/audit — 审核 / 审计记录
+### 4.10 GET /api/admin/audit — 审核 / 审计记录
 
 - **权限：** **超级管理员**
 - **Query 参数：**
@@ -530,7 +560,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.10 GET /api/admin/reviewers — 审核员列表
+### 4.11 GET /api/admin/reviewers — 审核员列表
 
 - **权限：** **超级管理员**
 
@@ -544,7 +574,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.11 POST /api/admin/reviewers — 新增审核员
+### 4.12 POST /api/admin/reviewers — 新增审核员
 
 - **权限：** **超级管理员**
 
@@ -569,7 +599,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.12 PUT /api/admin/reviewers/{id} — 修改审核员
+### 4.13 PUT /api/admin/reviewers/{id} — 修改审核员
 
 - **权限：** **超级管理员**
 - **语义：** 部分更新；`name`、`password` 均可选，出现即修改（二者都不传 = 无操作，仍返回成功并记审计）。
@@ -588,7 +618,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.13 DELETE /api/admin/reviewers/{id} — 删除审核员
+### 4.14 DELETE /api/admin/reviewers/{id} — 删除审核员
 
 - **权限：** **超级管理员**
 - **Body：** 无
@@ -605,7 +635,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.14 GET /api/admin/members — 条目列表（管理端）
+### 4.15 GET /api/admin/members — 条目列表（管理端）
 
 - **权限：** **超级管理员**
 - **说明：** 与 `GET /api/members` 返回一致（管理端也**不**额外暴露任何隐藏字段）。
@@ -613,7 +643,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.15 POST /api/admin/members — 新增条目（立即生效）
+### 4.16 POST /api/admin/members — 新增条目（立即生效）
 
 - **权限：** **超级管理员**
 - **生效方式：** 立即生效，**不进入审核流**
@@ -641,7 +671,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.16 PUT /api/admin/members/{id} — 修改条目（立即生效）
+### 4.17 PUT /api/admin/members/{id} — 修改条目（立即生效）
 
 - **权限：** **超级管理员**
 - **语义：** 部分更新，字段缺省 = 不修改（见 §3.2）。
@@ -660,7 +690,7 @@ Authorization: Bearer <adminToken>
 
 ---
 
-### 4.17 DELETE /api/admin/members/{id} — 删除条目
+### 4.18 DELETE /api/admin/members/{id} — 删除条目
 
 - **权限：** **超级管理员**
 - **Body：** 无
@@ -767,19 +797,20 @@ Authorization: Bearer <adminToken>
 |  3  | POST   | `/api/submissions`                        | 公开 + 限流   | 提交新增 / 修改建议           |
 |  4  | GET    | `/api/submissions?status=`                | 审核员 +      | 审核记录列表（别名）          |
 |  5  | POST   | `/api/admin/login`                        | 公开 + 限流   | 统一后台登录                  |
-|  6  | GET    | `/api/admin/me`                           | 审核员 +      | 当前会话 `{ role, identity }` |
-|  7  | GET    | `/api/admin/submissions?status=`          | 审核员 +      | 审核记录列表                  |
-|  8  | POST   | `/api/admin/submissions/{id}/approve`     | 审核员 +      | 通过（应用变更）              |
-|  9  | POST   | `/api/admin/submissions/{id}/reject`      | 审核员 +      | 驳回（必填理由）              |
-| 10  | GET    | `/api/admin/audit?limit=`                 | 超级管理员    | 审计记录（最新在前，≤ 500）   |
-| 11  | GET    | `/api/admin/reviewers`                    | 超级管理员    | 审核员列表                    |
-| 12  | POST   | `/api/admin/reviewers`                    | 超级管理员    | 新增审核员                    |
-| 13  | PUT    | `/api/admin/reviewers/{id}`               | 超级管理员    | 修改审核员名称 / 密码         |
-| 14  | DELETE | `/api/admin/reviewers/{id}`               | 超级管理员    | 删除审核员并吊销其会话        |
-| 15  | GET    | `/api/admin/members`                      | 超级管理员    | 条目列表（管理端）            |
-| 16  | POST   | `/api/admin/members`                      | 超级管理员    | 新增条目（立即生效）          |
-| 17  | PUT    | `/api/admin/members/{id}`                 | 超级管理员    | 修改条目（立即生效）          |
-| 18  | DELETE | `/api/admin/members/{id}`                 | 超级管理员    | 删除条目（级联作废 pending）  |
+|  6  | GET    | `/api/avatar?u=`                          | 公开          | 头像反向代理（境外图床）      |
+|  7  | GET    | `/api/admin/me`                           | 审核员 +      | 当前会话 `{ role, identity }` |
+|  8  | GET    | `/api/admin/submissions?status=`          | 审核员 +      | 审核记录列表                  |
+|  9  | POST   | `/api/admin/submissions/{id}/approve`     | 审核员 +      | 通过（应用变更）              |
+| 10  | POST   | `/api/admin/submissions/{id}/reject`      | 审核员 +      | 驳回（必填理由）              |
+| 11  | GET    | `/api/admin/audit?limit=`                 | 超级管理员    | 审计记录（最新在前，≤ 500）   |
+| 12  | GET    | `/api/admin/reviewers`                    | 超级管理员    | 审核员列表                    |
+| 13  | POST   | `/api/admin/reviewers`                    | 超级管理员    | 新增审核员                    |
+| 14  | PUT    | `/api/admin/reviewers/{id}`               | 超级管理员    | 修改审核员名称 / 密码         |
+| 15  | DELETE | `/api/admin/reviewers/{id}`               | 超级管理员    | 删除审核员并吊销其会话        |
+| 16  | GET    | `/api/admin/members`                      | 超级管理员    | 条目列表（管理端）            |
+| 17  | POST   | `/api/admin/members`                      | 超级管理员    | 新增条目（立即生效）          |
+| 18  | PUT    | `/api/admin/members/{id}`                 | 超级管理员    | 修改条目（立即生效）          |
+| 19  | DELETE | `/api/admin/members/{id}`                 | 超级管理员    | 删除条目（级联作废 pending）  |
 
 ### 7.2 客户端行为约定（后端需知悉）
 
