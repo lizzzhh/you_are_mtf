@@ -1,11 +1,13 @@
-# 星轨社团成员时间线系统 · API 文档
+# X友跨翻车列表系统 · API 文档
 
 | 项目         | 内容                                                                  |
 | ------------ | --------------------------------------------------------------------- |
-| **文档版本** | v1.0                                                                  |
-| **更新日期** | 2026-08-27                                                            |
-| **适用范围** | 前台成员时间线、用户自助修改资料、后台审核与成员管理                  |
-| **约定基准** | 与前端实现（apiFetch 请求层）严格对齐，后端按本文档实现即可零改动对接 |
+| **文档版本** | v2.0                                                                  |
+| **更新日期** | 2026-10-11                                                            |
+| **适用范围** | 前台翻车列表、匿名提交（新增 / 修改）建议、后台审核、审核员与条目管理 |
+| **约定基准** | 与前端实现（`content/index.html` 的 `apiFetch`）严格对齐              |
+
+> ⚠️ 本文档描述 **v2 系统**。与旧版「社团成员时间线」不兼容：已移除**真实姓名验证**与**届别**，新增 **X 用户名**、**翻车日期**、**Cloudflare Turnstile 人机验证**、**审核员 / 超级管理员**双角色。
 
 ---
 
@@ -30,40 +32,42 @@
 | Base URL      | `/api`                                     |
 | 传输协议      | 仅 HTTPS                                   |
 | 请求/响应格式 | `application/json; charset=utf-8`          |
-| 时间格式      | ISO 8601（UTC），如 `2026-08-27T06:00:00Z` |
+| 时间格式      | ISO 8601（UTC），如 `2026-10-11T06:00:00Z` |
+| 日期字段格式  | `YYYY-MM-DD`，如 `2025-05-20`              |
 | ID 类型       | 正整数，服务端自增分配                     |
 
 ### 1.2 角色与权限模型
 
-| 角色                 | 鉴权方式                | 能力                                   |
-| -------------------- | ----------------------- | -------------------------------------- |
-| 游客（任何人）       | 无                      | 查看成员列表、验证姓名、提交修改审核   |
-| 成员（通过姓名验证） | `verifyToken`（一次性） | 修改本人资料（须审核后生效）           |
-| 管理员               | `adminToken`（Bearer）  | 审核、增删改成员（立即生效，不走审核） |
+| 角色         | 鉴权方式               | 能力                                       |
+| ------------ | ---------------------- | ------------------------------------------ |
+| 游客（任何人） | 无                     | 查看翻车列表、提交新增 / 修改建议（需 Turnstile） |
+| 审核员       | `adminToken`（Bearer） | 阅读建议、通过 / 驳回                       |
+| 超级管理员   | `adminToken`（Bearer） | 审核员全部能力 + 审核记录、审核员管理、条目直接管理 |
 
-> 💡 没有注册/登录体系。成员身份通过「真实姓名哈希比对」临时确立；管理员通过固定密码登录。
+> 💡 没有注册体系。**超级管理员密码**来自环境变量 `ADMIN_PASSWORD`；**审核员账号**存于数据库 `reviewers` 表（PBKDF2 慢哈希）。
+> 登录接口会先比对该密码是否等于超级管理员密码，否则依次比对每个审核员的密码哈希，命中即确定身份与角色。
 
 ### 1.3 核心业务流
 
-**用户修改流程（需审核）：**
+**提交建议流程（所有条目变更都需审核）：**
 
 ```
-输入真实姓名 ──> POST /verify-name ──> verifyToken (5min / 一次性)
-                                          │
-                                          ▼
-                              POST /submissions {verifyToken, changes}
+游客填写表单 ──> 完成 Turnstile ──> POST /api/submissions {type, changes}
                                           │
                                           ▼
                                    进入 pending 队列
                                           │
-                        ┌─── 管理员 approve ───> changes 应用到 member
-                        └─── 管理员 reject ───> 记录驳回理由
+                        ┌─── 审核员 approve ──> 变更应用到成员（或新建成员）
+                        └─── 审核员 reject ───> 记录驳回理由
 ```
 
-**管理员操作流程（立即生效）：**
+**管理流程：**
 
 ```
-POST /admin/login ──> adminToken ──> GET/POST/PUT/DELETE /admin/members
+POST /admin/login ──> adminToken（role 自动识别）
+      │
+      ├── 审核员：GET /admin/submissions → approve / reject
+      └── 超级管理员：+ /admin/audit、/admin/reviewers、/admin/members
 ```
 
 ---
@@ -80,7 +84,7 @@ POST /admin/login ──> adminToken ──> GET/POST/PUT/DELETE /admin/members
 // 失败
 {
   "ok": false,
-  "error": { "code": "NAME_NOT_FOUND", "message": "该姓名不在社团登记名单中" }
+  "error": { "code": "FIELD_INVALID", "message": "翻车日期格式应为 YYYY-MM-DD（如 2025-05-20）" }
 }
 ```
 
@@ -94,152 +98,194 @@ POST /admin/login ──> adminToken ──> GET/POST/PUT/DELETE /admin/members
 Authorization: Bearer <adminToken>
 ```
 
+> `GET /api/submissions`（无 `admin/` 前缀）是 `GET /api/admin/submissions` 的兼容别名，同样需要 Bearer。
+
 ### 2.3 令牌体系
 
-|              | verifyToken                                      | adminToken                                                    |
-| ------------ | ------------------------------------------------ | ------------------------------------------------------------- |
-| **签发方**   | `POST /verify-name`                              | `POST /admin/login`                                           |
-| **传递方式** | 请求 body                                        | `Authorization` 头                                            |
-| **有效期**   | 5 分钟                                           | 2 小时（`expiresAt` 一并返回）                                |
-| **使用次数** | 一次性：提交成功时销毁；校验失败不消耗；到期销毁 | 有效期内不限次                                                |
-| **失效表现** | `TOKEN_INVALID` / `TOKEN_EXPIRED`                | `ADMIN_TOKEN_INVALID`（客户端收到后清除本地令牌并回到登录页） |
+|            | adminToken                                                                  |
+| ---------- | --------------------------------------------------------------------------- |
+| **签发方** | `POST /api/admin/login`                                                     |
+| **传递方式** | `Authorization: Bearer` 头                                                 |
+| **有效期** | 2 小时（响应中 `expiresAt` 一并返回）                                       |
+| **使用次数** | 有效期内不限次                                                             |
+| **失效表现** | `401 ADMIN_TOKEN_INVALID`（客户端收到后清除本地令牌并回到登录页）           |
+| **吊销**   | 服务端 `admin_sessions` 表存储会话；删除审核员时同步吊销其全部会话；过期会话惰性清理 |
 
-> 格式建议：加密随机不透明字符串（如 `vt_` + 32 位随机），不建议携带数据的 JWT；adminToken 需支持服务端吊销（会话表）。
+> 令牌为不透明随机字符串（`at_` + 32 位十六进制）。超级管理员与审核员使用同一套令牌，仅靠会话中的 `role` 区分权限。
 
 ### 2.4 HTTP 状态码
 
-| 状态码 | 含义           | 本系统使用场景                      |
-| ------ | -------------- | ----------------------------------- |
-| 200    | 成功           | 所有成功响应                        |
-| 400    | 客户端参数错误 | 校验失败（见错误码表）              |
-| 401    | 认证失败       | 姓名不存在、令牌无效/过期、密码错误 |
-| 403    | 授权失败       | 姓名与目标成员不匹配                |
-| 404    | 资源不存在     | 审核/成员不存在、路由不存在         |
-| 409    | 冲突           | 重复审核、姓名重复登记              |
-| 429    | 限流           | 触发频率限制                        |
-| 500    | 服务端异常     | `INTERNAL_ERROR`                    |
+| 状态码 | 含义           | 本系统使用场景                       |
+| ------ | -------------- | ------------------------------------ |
+| 200    | 成功           | 所有成功响应                         |
+| 400    | 客户端参数错误 | 校验失败（见错误码表）               |
+| 401    | 认证失败       | 密码错误、令牌无效/过期              |
+| 403    | 授权失败       | 审核员访问超级管理员专属接口         |
+| 404    | 资源不存在     | 条目 / 审核记录 / 审核员不存在、未知路由 |
+| 409    | 冲突           | 重复审核、审核员名称重复             |
+| 413    | 请求体过大     | 请求体超过 64KB                      |
+| 429    | 限流           | 触发频率限制                         |
+| 500    | 服务端异常     | `INTERNAL_ERROR`                     |
+| 502    | 上游异常       | Turnstile 校验服务不可用             |
 
 ### 2.5 错误码总表
 
-| code                  | HTTP | 触发场景                                      |
-| --------------------- | ---- | --------------------------------------------- |
-| `PARAM_MISSING`       | 400  | verify-name 未传 realName                     |
-| `FIELD_MISSING`       | 400  | 添加成员缺 realName / name / generation       |
-| `FIELD_INVALID`       | 400  | name / generation 字段存在但为空串            |
-| `FIELD_FORBIDDEN`     | 400  | changes 中包含 realName（或任意白名单外字段） |
-| `CHANGES_EMPTY`       | 400  | changes 为空对象                              |
-| `REASON_REQUIRED`     | 400  | 驳回时未填 reason                             |
-| `NAME_NOT_FOUND`      | 401  | 验证姓名未登记                                |
-| `TOKEN_INVALID`       | 401  | verifyToken 不存在或已使用                    |
-| `TOKEN_EXPIRED`       | 401  | verifyToken 已过期                            |
-| `PASSWORD_WRONG`      | 401  | 管理密码错误                                  |
-| `ADMIN_TOKEN_INVALID` | 401  | adminToken 缺失/无效/过期                     |
-| `NAME_MISMATCH`       | 403  | 姓名存在但与指定 memberId 不匹配              |
-| `NOT_FOUND`           | 404  | 审核记录不存在 / 未知路由                     |
-| `MEMBER_NOT_FOUND`    | 404  | 成员不存在（含：审核通过时目标成员已被删除）  |
-| `REALNAME_EXISTS`     | 409  | 真实姓名已登记给其他成员                      |
-| `ALREADY_REVIEWED`    | 409  | 审核记录已处理（终态）                        |
-| `RATE_LIMITED`        | 429  | 触发限流                                      |
-| `INTERNAL_ERROR`      | 500  | 服务端异常（兜底）                            |
+| code                  | HTTP     | 触发场景                                                |
+| --------------------- | -------- | ------------------------------------------------------- |
+| `PARAM_MISSING`       | 400      | 请求体非法 / 缺 `type` / 缺 `memberId`                   |
+| `FIELD_MISSING`       | 400      | 新增条目缺少必填字段（`username` / `name` / `crashDate`） |
+| `FIELD_INVALID`       | 400      | 字段类型或格式不正确（用户名 / 日期 / 头像 / 标签 / 审核员密码…） |
+| `FIELD_FORBIDDEN`     | 400      | 提交了白名单外字段（如 `id`）                            |
+| `CHANGES_EMPTY`       | 400      | `changes` 为空对象或非法类型                             |
+| `REASON_REQUIRED`     | 400      | 驳回时未填 `reason`                                      |
+| `TURNSTILE_FAILED`    | 400 / 502 | 人机验证缺失 / 失败 / 服务不可用                         |
+| `PASSWORD_WRONG`      | 401      | 管理密码错误                                             |
+| `ADMIN_TOKEN_INVALID` | 401      | `adminToken` 缺失 / 无效 / 过期                          |
+| `FORBIDDEN`           | 403      | 权限不足（审核员访问超级管理员接口）                     |
+| `NOT_FOUND`           | 404      | 审核记录不存在 / 未知路由                                |
+| `MEMBER_NOT_FOUND`    | 404      | 条目不存在（含 approve 时目标条目已被删除）              |
+| `REVIEWER_NOT_FOUND`  | 404      | 审核员不存在                                             |
+| `REVIEWER_EXISTS`     | 409      | 审核员名称已存在                                         |
+| `ALREADY_REVIEWED`    | 409      | 审核记录已处理（终态）                                   |
+| `RATE_LIMITED`        | 429      | 触发限流                                                 |
+| `BODY_TOO_LARGE`      | 413      | 请求体超过 64KB                                          |
+| `INTERNAL_ERROR`      | 500      | 服务端异常（兜底）                                       |
 
 ---
 
 ## 3. 数据模型
 
-### 3.1 Member（对外对象）
+### 3.1 Member（翻车条目 · 对外对象）
 
-所有返回成员的接口统一使用此结构：
+所有返回条目的接口统一使用此结构：
 
 ```json
 {
   "id": 1,
+  "username": "misaka_mikoto",
   "name": "御坂美琴",
-  "generation": "2025",
-  "role": "社长 · 电击使",
-  "bio": "常盘台中学王牌，超电磁炮使用者。",
-  "tags": ["动漫", "游戏", "cosplay", "音乐"],
-  "social": [{ "name": "哔哩哔哩", "url": "https://bilibili.com/misaka" }],
-  "avatar": "https://api.dicebear.com/7.x/thumbs/svg?seed=Misaka"
+  "crashDate": "2025-05-20",
+  "bio": "直播时把「超电磁炮」念成「超电磁炉」，当场被弹幕笑翻。",
+  "avatar": "https://api.dicebear.com/7.x/thumbs/svg?seed=Misaka",
+  "tags": ["直播翻车", "口播失误"]
 }
 ```
 
 ### 3.2 字段定义与校验规则
 
-| 字段         |      类型      |  创建必填  |     用户提交流可改     |         管理端可改          | 约束                                            |
-| ------------ | :------------: | :--------: | :--------------------: | :-------------------------: | ----------------------------------------------- |
-| `id`         |     number     | 服务端生成 |           ✗            |              ✗              | 正整数，自增                                    |
-| `realName`   |     string     |     ✓      | ✗（`FIELD_FORBIDDEN`） |  ✓（PUT 时缺省/空 = 不变）  | 全局唯一；仅存哈希，任何响应不含此字段          |
-| `name`       |     string     |     ✓      |           ✓            |     ✓（出现则必须非空）     | 非空，建议 ≤ 32 字符                            |
-| `generation` |     string     |     ✓      |           ✓            |     ✓（出现则必须非空）     | 非空，如 `"2025"`                               |
-| `role`       |     string     |     ✗      |           ✓            | ✓（出现即覆盖，可空串清空） | 建议 ≤ 32 字符                                  |
-| `bio`        |     string     |     ✗      |           ✓            |          ✓（同上）          | 建议 ≤ 500 字符                                 |
-| `avatar`     |     string     |     ✗      |           ✓            |          ✓（同上）          | URL 或空；空 = 前端用昵称首字占位               |
-| `tags`       |    string[]    |     ✗      |           ✓            |     ✓（出现则整体替换）     | 建议每项 ≤ 12 字符、总数 ≤ 8                    |
-| `social`     | `{name,url}[]` |     ✗      |           ✓            |     ✓（出现则整体替换）     | 建议每项两字段非空、总数 ≤ 8；URL 须 http/https |
+| 字段        |    类型    |  新增必填  | 用户建议可改 | 管理端可改 | 约束                                                                 |
+| ----------- | :--------: | :--------: | :----------: | :--------: | -------------------------------------------------------------------- |
+| `id`        |   number   | 服务端生成 |      ✗       |     ✗      | 正整数，自增                                                         |
+| `username`  |   string   |     ✓      |      ✓       |     ✓      | 规范化后须匹配 `^[a-z0-9_]{1,15}$`；**不唯一**（同一人可多条）       |
+| `name`      |   string   |     ✓      |      ✓       |     ✓      | 非空，≤ 32 字符                                                      |
+| `crashDate` |   string   |     ✓      |      ✓       |     ✓      | `YYYY-MM-DD` 且为合法日期（前台按月分组）                            |
+| `bio`       |   string   |     ✗      |      ✓       |     ✓      | 翻车详情；出现即覆盖，可空串清空                                     |
+| `avatar`    |   string   |     ✗      |      ✓       |     ✓      | URL；空 = 前端用昵称首字占位；仅允许 http/https，裸域名自动补 `https://` |
+| `tags`      |  string[]  |     ✗      |      ✓       |     ✓      | 出现即整体替换；≤ 8 个，单个 ≤ 24 字符                               |
 
-**部分更新语义（PUT /admin/members/{id}）：**
+**校验实现细节（服务端为准）：**
 
-- 字段未出现在 JSON 中 = 不修改；出现即修改
-- `tags` / `social` 无「追加」语义，传则整体替换
-- `realName` 特殊：出现但为空串 = 忽略（该字段无清除语义）
-  **URL 规范化：** 客户端展示时对无协议前缀的 URL 自动补 `https://`；服务端存储时应校验并规范化。
+- **用户名规范化**：去除 `@`、`https://` / `www.` 前缀、`x.com|twitter.com|mobile.twitter.com` 域名与路径及查询串，统一转小写；规范化结果须匹配 `^[a-z0-9_]{1,15}$`（X 官方用户名规则），否则 `FIELD_INVALID`。
+- **翻车日期**：正则 `^\d{4}-\d{2}-\d{2}$` 且 `new Date(y,m-1,d)` 可往返（拒绝 `2025-02-30` 之类）。
+- **头像 URL**：显式 `http(s)://` 合法；不含协议前缀的裸链接（如 `pbs.twimg.com/xxx.jpg`）自动补 `https://`；出现其他协议（如 `javascript:`、`data:`）一律 `FIELD_INVALID`。
+- **标签**：必须为字符串数组；服务端 trim、去空、截断至最多 8 个（提交超过 8 个本身即 `FIELD_INVALID`）。
+- **边界**：`bio` 目前**不设**硬性长度上限，但客户端应限制，服务端只做类型校验。
+
+**部分更新语义（`PUT /admin/members/{id}`）：**
+
+- 字段未出现在 JSON 中 = 不修改；出现即修改。
+- `tags` 无「追加」语义，传则整体替换。
+- 传空串可清空 `bio` / `avatar`；`username` / `name` / `crashDate` 出现则必须合法（值校验见上）。
 
 ### 3.3 Submission（审核记录）
 
 ```json
 {
   "id": 12,
-  "verifiedByRealName": true,
+  "type": "update",
   "memberId": 1,
   "memberName": "御坂美琴",
-  "changes": { "bio": "新的简介内容" },
-  "oldData": { "bio": "旧的简介内容" },
-  "createdAt": "2026-08-27T06:00:00Z",
+  "memberUsername": "misaka_mikoto",
+  "changes": { "crashDate": "2025-05-22", "bio": "补充新的细节" },
+  "oldData": { "crashDate": "2025-05-20", "bio": "旧的详情" },
+  "createdAt": "2026-10-11T06:00:00Z",
   "status": "pending",
   "reason": null,
-  "reviewedAt": null
+  "reviewedAt": null,
+  "reviewedBy": null
 }
 ```
 
-| 字段                      | 类型            | 说明                                                                     |
-| ------------------------- | --------------- | ------------------------------------------------------------------------ |
-| `id`                      | number          | 提交记录 ID                                                              |
-| `verifiedByRealName`      | boolean         | 恒为 `true`。提交时已通过实名验证的标记。不含任何明文/哈希姓名（见 3.4） |
-| `memberId` / `memberName` | number / string | 提交时刻的目标成员（快照）                                               |
-| `changes`                 | object          | 变更字段集，仅含白名单字段                                               |
-| `oldData`                 | object          | 提交时刻的字段快照，仅含 changes 中出现的字段，供审核界面展示 diff       |
-| `createdAt`               | string          | 提交时间                                                                 |
-| `status`                  | string          | `pending` / `approved` / `rejected`                                      |
-| `reason`                  | string \| null  | 驳回理由（仅 rejected）                                                  |
-| `reviewedAt`              | string \| null  | 处理时间（仅终态）                                                       |
+| 字段                          | 类型            | 说明                                                                    |
+| ----------------------------- | --------------- | ----------------------------------------------------------------------- |
+| `id`                          | number          | 提交记录 ID                                                             |
+| `type`                        | string          | `create`（新增条目）/ `update`（修改条目）                              |
+| `memberId`                    | number \| null  | 目标条目 ID；`create` 时为 `null`                                       |
+| `memberName`                  | string          | 提交时刻的昵称快照（`create` 时即 `changes.name`）                      |
+| `memberUsername`              | string          | 提交时刻的用户名快照（`create` 时即 `changes.username`）                |
+| `changes`                     | object          | 变更字段集，仅含白名单字段                                              |
+| `oldData`                     | object          | 提交时刻旧值快照，仅含 `changes` 中出现的字段，供审核界面展示 diff（`create` 为 `{}`） |
+| `createdAt`                   | string          | 提交时间                                                                |
+| `status`                      | string          | `pending` / `approved` / `rejected`                                     |
+| `reason`                      | string \| null  | 驳回理由（仅 `rejected`）                                               |
+| `reviewedAt`                  | string \| null  | 处理时间（仅终态）                                                      |
+| `reviewedBy`                  | string \| null  | 处理人（审核员名 / 超级管理员）                                         |
 
-### 3.4 realName「只进不出」原则（核心安全约定）
+> ⚠️ **字段白名单：** `username`、`name`、`crashDate`、`bio`、`avatar`、`tags`。其余任何字段（含 `id`、`memberId`）→ `400 FIELD_FORBIDDEN`。
 
-realName 是**只写**字段，全系统唯一入口是管理端成员管理：
+### 3.4 Reviewer（审核员）
 
-- **只进**
-  - `POST /admin/members`（必填）
-  - `PUT /admin/members/{id}`（非空时覆盖）
-- **不出的范围：**
-  - `GET /members`、`GET /admin/members`、`/verify-name` 返回的 member —— 均不含该字段（**管理员也拿不到**）
-  - 审核记录不含提交人姓名，仅 `verifiedByRealName: true` 标记
-  - 任何错误信息、日志、缓存中均不得出现明文
-- **用户提交流禁止修改该字段：** `changes.realName` → `400 FIELD_FORBIDDEN`
-- **生产存储：** 仅存哈希（方案见 §6.1），明文只在单个请求的内存处理期间存在
-- **唯一性：** 同一真实姓名只能登记给一个成员（`REALNAME_EXISTS`）
-- **销毁：** 删除成员时，其姓名哈希随之删除
+```json
+{ "id": 1, "name": "审核员甲", "createdAt": "2026-10-11T06:00:00Z" }
+```
+
+> `password_hash` **绝不返回**，仅存 PBKDF2 慢哈希（格式 `pbkdf2$轮数$盐$摘要`）。
+
+### 3.5 AuditLog（审核 / 审计记录）
+
+```json
+{
+  "id": 30,
+  "actor": "审核员甲",
+  "actorRole": "reviewer",
+  "action": "approve",
+  "target": "修改 #12 御坂美琴",
+  "detail": "{\"crashDate\":\"2025-05-22\"}",
+  "createdAt": "2026-10-11T06:05:00Z"
+}
+```
+
+`action` 取值：`login`、`approve`、`reject`、`add_reviewer`、`update_reviewer`、`delete_reviewer`、`create_member`、`update_member`、`delete_member`。
 
 ---
 
 ## 4. 接口详情
 
-### 4.1 GET /api/members — 成员列表
+### 4.1 GET /api/config — 公开配置
 
-获取全部已生效成员。前台时间线数据源。
+前端启动时获取 Turnstile 开关与站点公钥。
 
 - **权限：** 公开
 - **请求参数：** 无
-  **成功 200：**
+
+**成功 200：**
+
+```json
+{ "ok": true, "data": { "turnstileEnabled": true, "turnstileSiteKey": "0x4AAA..." } }
+```
+
+**说明：** `turnstileEnabled` = 服务端是否配置了 `TURNSTILE_SECRET_KEY`。为 `false` 时前端不渲染 Turnstile 控件、提交时不带 token。
+
+---
+
+### 4.2 GET /api/members — 翻车条目列表
+
+获取全部已生效条目。前台时间线数据源。
+
+- **权限：** 公开
+- **请求参数：** 无
+
+**成功 200：**
 
 ```json
 { "ok": true, "data": [{ "...Member 对象": "" }] }
@@ -247,105 +293,87 @@ realName 是**只写**字段，全系统唯一入口是管理端成员管理：
 
 **说明：**
 
-- 数组顺序不做保证，客户端按 generation 分组、降序展示
-- 管理员添加成员、审核通过的修改，立即反映在此接口
-- 空列表返回 `"data": []`（非 null）
-  **错误：** 仅通用 `500 INTERNAL_ERROR`
+- 服务端按 `crash_date DESC, id DESC` 排序；客户端也可再按 `crashDate` 所属月份分组展示。
+- 空列表返回 `"data": []`（非 null）。
+- **错误：** 仅通用 `500 INTERNAL_ERROR`。
 
 ---
 
-### 4.2 POST /api/verify-name — 真实姓名验证
+### 4.3 POST /api/submissions — 提交新增 / 修改建议
 
-验证真实姓名，签发一次性 verifyToken，并返回对应成员当前资料（供表单预填）。
+任何人可提交，进入待审队列。**所有条目变更都必须经过审核。**
 
-- **权限：** 公开（强制限流，见 §6.3）
-  **请求 Body：**
-  | 字段 | 类型 | 必填 | 说明 |
-  |---|---|:---:|---|
-  | `realName` | string | ✓ | 真实姓名明文；仅在本请求处理期间存在于内存 |
-  | `memberId` | number | ✗ | 从指定成员卡发起修改时传入，用于校验「该姓名确实属于该成员」，防横向越权 |
+- **权限：** 公开（需 Turnstile，若服务端已配置；强制限流）
+
+**请求 Body：**
+
+| 字段             |   类型   | 必填 | 说明                                            |
+| ---------------- | :------: | :--: | ----------------------------------------------- |
+| `type`           |  string  |  ✓   | `create`（新增）或 `update`（修改）             |
+| `memberId`       |  number  | 条件 | `type=update` 时必填；`create` 时忽略          |
+| `changes`        |  object  |  ✓   | 变更字段集，仅含白名单字段                       |
+| `turnstileToken` |  string  | 条件 | 服务端配置了 `TURNSTILE_SECRET_KEY` 时必填       |
 
 ```json
-{ "realName": "张三", "memberId": 3 }
+// 新增
+{
+  "type": "create",
+  "changes": {
+    "username": "@elonmusk",
+    "name": "马斯克",
+    "crashDate": "2025-05-20",
+    "bio": "把 X 改成 Y 又改回来",
+    "avatar": "pbs.twimg.com/xxx.jpg",
+    "tags": ["口嗨", "打脸"]
+  },
+  "turnstileToken": "0.xxxx"
+}
+```
+
+```json
+// 修改
+{
+  "type": "update",
+  "memberId": 3,
+  "changes": { "crashDate": "2025-05-22", "bio": "补充新的细节" },
+  "turnstileToken": "0.xxxx"
+}
 ```
 
 **成功 200：**
-
-```json
-{
-  "ok": true,
-  "data": {
-    "memberId": 3,
-    "verifyToken": "vt_a1b2c3d4e5f6...",
-    "member": { "...Member 对象（不含 realName）": "" }
-  }
-}
-```
-
-**错误：**
-| code | 条件 |
-|---|---|
-| `PARAM_MISSING` | realName 为空 |
-| `NAME_NOT_FOUND` | 姓名不在登记名单 |
-| `NAME_MISMATCH` | 姓名存在，但与传入的 memberId 不属于同一成员 |
-| `RATE_LIMITED` | 触发限流 |
-**说明：**
-
-- 服务端对输入做哈希后与存储哈希比对（§6.1），明文不落库
-- memberId 匹配校验优先于其他业务（找到成员后立即比对）
-
----
-
-### 4.3 POST /api/submissions — 提交资料修改
-
-将修改提交至审核队列。
-
-- **权限：** 公开（需有效 verifyToken）
-  **请求 Body：**
-  | 字段 | 类型 | 必填 | 说明 |
-  |---|---|:---:|---|
-  | `verifyToken` | string | ✓ | 4.2 签发的一次性令牌 |
-  | `changes` | object | ✓ | 变更字段集，仅包含发生变化的字段 |
-
-```json
-{
-  "verifyToken": "vt_a1b2c3d4e5f6...",
-  "changes": {
-    "bio": "新的简介",
-    "tags": ["动漫", "音乐"],
-    "social": [{ "name": "哔哩哔哩", "url": "https://bilibili.com/xxx" }]
-  }
-}
-```
-
-> ⚠️ **changes 字段白名单：** `name`、`generation`、`role`、`bio`、`avatar`、`tags`、`social`。其余任何字段（含 realName、id）→ `400 FIELD_FORBIDDEN`。
-> **成功 200：**
 
 ```json
 { "ok": true, "data": { "submissionId": 12 } }
 ```
 
 **错误：**
-| code | 条件 |
-|---|---|
-| `TOKEN_INVALID` | 令牌不存在或已使用 |
-| `TOKEN_EXPIRED` | 令牌已过期 |
-| `CHANGES_EMPTY` | changes 为空对象或非法类型 |
-| `FIELD_INVALID` | name / generation 为空串 |
-| `FIELD_FORBIDDEN` | 含白名单外字段 |
-| `RATE_LIMITED` | 限流 |
+
+| code                    | 条件                                             |
+| ----------------------- | ------------------------------------------------ |
+| `PARAM_MISSING`         | `type` 非 `create` / `update`，或 `update` 缺 `memberId` |
+| `TURNSTILE_FAILED`      | 已配置校验但 token 缺失 / 失败 / 服务不可用      |
+| `CHANGES_EMPTY`         | `changes` 为空对象或非法类型                     |
+| `FIELD_MISSING`         | `create` 缺少 `username` / `name` / `crashDate`  |
+| `FIELD_INVALID`         | 字段类型 / 格式不合法                            |
+| `FIELD_FORBIDDEN`       | 含白名单外字段                                   |
+| `MEMBER_NOT_FOUND`      | `update` 的目标条目不存在                        |
+| `RATE_LIMITED`          | 限流                                             |
+
 **说明：**
 
-- 令牌在提交成功时销毁；校验类失败（CHANGES_EMPTY 等）**不消耗令牌**，用户修正后可直接重提
-- 服务端在提交时记录 oldData 快照
-- 前端已做 diff 只发变化字段，服务端仍须独立校验字段类型与约束
+- 服务端处理顺序：限流 → 读取/解析 body → 校验 `type` → **Turnstile 校验** → 字段白名单与值校验 → 落库。
+- `create` 时 `memberName` / `memberUsername` 取 `changes` 中的昵称 / 用户名；`update` 时记录目标条目的快照，并保存 `changes` 中字段的旧值快照。
+- 用户名不唯一：同名 `username` 可存在多条不同 `crashDate` 的条目。
 
 ---
 
-### 4.4 POST /api/admin/login — 后台登录
+### 4.4 POST /api/admin/login — 后台登录（统一入口）
+
+同一个入口自动识别**超级管理员**或**审核员**。
 
 - **权限：** 公开（强制限流）
-  **请求 Body：**
+
+**请求 Body：**
 
 ```json
 { "password": "..." }
@@ -358,66 +386,109 @@ realName 是**只写**字段，全系统唯一入口是管理端成员管理：
   "ok": true,
   "data": {
     "adminToken": "at_x9y8z7...",
-    "expiresAt": "2026-08-27T08:00:00Z"
+    "role": "super",
+    "identity": "超级管理员",
+    "expiresAt": "2026-10-11T08:00:00Z"
   }
 }
 ```
 
-## **错误：** `401 PASSWORD_WRONG` / `429 RATE_LIMITED`
+| 字段         | 说明                                                                     |
+| ------------ | ------------------------------------------------------------------------ |
+| `role`       | `super`（超级管理员）或 `reviewer`（审核员）                             |
+| `identity`   | 显示名：超级管理员恒为 `"超级管理员"`；审核员为其 `name`                 |
+| `expiresAt`  | 会话到期时间，签发后 2 小时                                              |
 
-### 4.5 GET /api/admin/submissions — 审核记录列表
+**错误：** `401 PASSWORD_WRONG` / `429 RATE_LIMITED`
 
-- **权限：** 管理员
-  **Query 参数：**
-  | 参数 | 可选值 | 默认 | 说明 |
-  |---|---|---|---|
-  | `status` | `pending` / `approved` / `rejected` | `pending` | 按状态筛选 |
-  **成功 200：**
+**说明：**
+
+- 先与 `env.ADMIN_PASSWORD` 恒时比较；不匹配再遍历 `reviewers` 表逐一做 PBKDF2 校验。
+- `ADMIN_PASSWORD` 未配置时无法以超级管理员身份登录（仍可用审核员密码登录）。
+- 登录成功写入 `audit_logs`（`action=login`）。
+
+---
+
+### 4.5 GET /api/admin/me — 当前会话
+
+- **权限：** 审核员 +
+
+**成功 200：**
+
+```json
+{ "ok": true, "data": { "role": "reviewer", "identity": "审核员甲" } }
+```
+
+**错误：** `401 ADMIN_TOKEN_INVALID`
+
+---
+
+### 4.6 GET /api/admin/submissions — 审核记录列表
+
+- **权限：** 审核员 +
+
+**Query 参数：**
+
+| 参数     | 可选值                                | 默认      | 说明       |
+| -------- | ------------------------------------- | --------- | ---------- |
+| `status` | `pending` / `approved` / `rejected`   | `pending` | 按状态筛选 |
+
+**成功 200：**
 
 ```json
 { "ok": true, "data": [{ "...Submission 对象": "" }] }
 ```
 
-- **排序：** `createdAt` 降序（最新在前）
-- 非法 status 值返回空数组或 400（二选一，需后端固定行为）
-  **错误：** `401 ADMIN_TOKEN_INVALID`
+**说明：**
+
+- 排序：`created_at DESC, id DESC`（最新在前）。
+- **非法 `status` 返回 `"data": []`（200），不报错。**
+- 别名：`GET /api/submissions?status=` 行为完全一致（需 Bearer）。
+- **错误：** `401 ADMIN_TOKEN_INVALID`
 
 ---
 
-### 4.6 POST /api/admin/submissions/{id}/approve — 通过审核
+### 4.7 POST /api/admin/submissions/{id}/approve — 通过审核
 
-- **权限：** 管理员
+- **权限：** 审核员 +
 - **Body：** 无
-  **成功 200：**
+
+**成功 200：**
 
 ```json
 { "ok": true, "data": { "applied": true } }
 ```
 
-**副作用：**
+**副作用（同一 `batch` 事务）：**
 
-- 将 changes 应用到对应成员（last-write-wins，不做冲突检测）
-- status → `approved`，reviewedAt 记录当前时间
-  **错误：**
-  | code | 条件 |
-  |---|---|
-  | `ADMIN_TOKEN_INVALID` | 未认证 |
-  | `NOT_FOUND` | 审核记录不存在 |
-  | `ALREADY_REVIEWED` | 已处理（终态） |
-  | `MEMBER_NOT_FOUND` | 目标成员已被删除，拒绝应用 |
+- `type=create`：在 `members` 插入新条目（用 `changes` 规范化后的值）。
+- `type=update`：将 `changes` 应用到 `member_id` 指向的条目（last-write-wins，不做冲突检测）。
+- 审核记录 `status → approved`，写入 `reviewed_at`、`reviewed_by`。
+- 写 `audit_logs`（`action=approve`）。
+
+**错误：**
+
+| code                 | 条件                                       |
+| -------------------- | ------------------------------------------ |
+| `ADMIN_TOKEN_INVALID`| 未认证                                     |
+| `NOT_FOUND`          | 审核记录不存在                             |
+| `ALREADY_REVIEWED`   | 已处理（终态）                             |
+| `MEMBER_NOT_FOUND`   | `update` 的目标条目已被删除，拒绝应用变更  |
 
 ---
 
-### 4.7 POST /api/admin/submissions/{id}/reject — 驳回
+### 4.8 POST /api/admin/submissions/{id}/reject — 驳回
 
-- **权限：** 管理员
-  **请求 Body：**
-  | 字段 | 类型 | 必填 | 说明 |
-  |---|---|:---:|---|
-  | `reason` | string | ✓ | 驳回理由，非空 |
+- **权限：** 审核员 +
+
+**请求 Body：**
+
+| 字段     |  类型  | 必填 | 说明           |
+| -------- | :----: | :--: | -------------- |
+| `reason` | string |  ✓   | 驳回理由，非空 |
 
 ```json
-{ "reason": "简介内容不合适，请修改后重新提交" }
+{ "reason": "详情内容不合适，请修改后重新提交" }
 ```
 
 **成功 200：**
@@ -426,118 +497,80 @@ realName 是**只写**字段，全系统唯一入口是管理端成员管理：
 { "ok": true, "data": { "applied": false } }
 ```
 
-**副作用：** status → `rejected`，记录 reason 与 reviewedAt。**不触碰成员数据。**
-**错误：** `401 ADMIN_TOKEN_INVALID` / `404 NOT_FOUND` / `409 ALREADY_REVIEWED` / `400 REASON_REQUIRED`
+**副作用：** `status → rejected`，记录 `reason`、`reviewed_at`、`reviewed_by`，并写 `audit_logs`（`action=reject`）。**不触碰条目数据。**
+
+**错误：** `401 ADMIN_TOKEN_INVALID` / `400 REASON_REQUIRED` / `404 NOT_FOUND` / `409 ALREADY_REVIEWED`
+
+> 处理顺序：先校验 `reason`（缺失直接 `REASON_REQUIRED`），再检查记录是否存在与是否已处理。
 
 ---
 
-### 4.8 GET /api/admin/members — 成员列表（管理端）
+### 4.9 GET /api/admin/audit — 审核 / 审计记录
 
-- **权限：** 管理员
-  **成功 200：**
+- **权限：** **超级管理员**
+- **Query 参数：**
 
-```json
-{ "ok": true, "data": [{ "...Member 对象（不含 realName）": "" }] }
-```
+| 参数    | 类型   | 默认 | 说明                          |
+| ------- | ------ | ---- | ----------------------------- |
+| `limit` | number | 100  | 返回条数；非法或 ≤0 时取 100；上限 **500** |
 
-> 🔒 即使是管理员，也无法获取任何成员的真实姓名（含哈希）——只进不出原则对管理端同样生效（§3.4）。
-
-## **错误：** `401 ADMIN_TOKEN_INVALID`
-
-### 4.9 POST /api/admin/members — 添加成员
-
-- **权限：** 管理员
-- **生效方式：** 立即生效，不进入审核流
-  **请求 Body：**
+**成功 200：**
 
 ```json
-{
-  "realName": "张三",
-  "name": "新成员",
-  "generation": "2026",
-  "role": "活动执行",
-  "bio": "……",
-  "avatar": "",
-  "tags": ["动漫"],
-  "social": [{ "name": "哔哩哔哩", "url": "https://…" }]
-}
+{ "ok": true, "data": [{ "...AuditLog 对象": "" }] }
 ```
 
-| 字段                      | 必填 | 说明                                           |
-| ------------------------- | :--: | ---------------------------------------------- |
-| `realName`                |  ✓   | 明文，服务端立即哈希后存储，明文不落库不写日志 |
-| `name`                    |  ✓   | 非空                                           |
-| `generation`              |  ✓   | 非空                                           |
-| `role` / `bio` / `avatar` |  ✗   | 可为空串                                       |
-| `tags` / `social`         |  ✗   | 缺省为 `[]`                                    |
+**说明：** 按 `id DESC`（最新在前）。**错误：** `401 ADMIN_TOKEN_INVALID` / `403 FORBIDDEN`
 
-> 校验顺序建议：realName 非空 → realName 唯一 → name 非空 → generation 非空 → 其余字段类型校验。
-> **成功 200：**
+---
+
+### 4.10 GET /api/admin/reviewers — 审核员列表
+
+- **权限：** **超级管理员**
+
+**成功 200：**
 
 ```json
-{ "ok": true, "data": { "id": 13 } }
+{ "ok": true, "data": [{ "id": 1, "name": "审核员甲", "createdAt": "2026-10-11T06:00:00Z" }] }
 ```
 
-## **错误：** `401 ADMIN_TOKEN_INVALID` / `400 FIELD_MISSING` / `409 REALNAME_EXISTS`
+**错误：** `401 ADMIN_TOKEN_INVALID` / `403 FORBIDDEN`
 
-### 4.9b POST /api/admin/members/batch — 批量导入成员
+---
 
-- **权限：** 管理员
-- **生效方式：** 立即生效，不进入审核流
-- **说明：** 与 §4.9 同款校验（realName 必填 + 唯一；name/generation 必填；其余字段类型校验）。单批最多 200 条；批内重复 realName 标记 `DUPLICATE_IN_BATCH`，与已有成员重复标记 `REALNAME_EXISTS`，字段非法进入 `errors`。成功项通过 `env.DB.batch()` 原子插入。
-  **请求 Body：**
+### 4.11 POST /api/admin/reviewers — 新增审核员
+
+- **权限：** **超级管理员**
+
+**请求 Body：**
+
+| 字段       |  类型  | 必填 | 说明               |
+| ---------- | :----: | :--: | ------------------ |
+| `name`     | string |  ✓   | 审核员显示名，≤ 32 字符，唯一 |
+| `password` | string |  ✓   | 登录密码，≥ 6 位   |
 
 ```json
-{
-  "members": [
-    { "realName": "张三", "name": "御坂美琴", "generation": "2025", "role": "", "bio": "", "avatar": "", "tags": ["动漫"], "social": [] },
-    { "realName": "李四", "name": "立华奏", "generation": "2025" }
-  ]
-}
+{ "name": "审核员甲", "password": "reviewer1" }
 ```
 
-> 成功 200：
+**成功 200：**
 
 ```json
-{
-  "ok": true,
-  "data": {
-    "created": [{ "index": 1, "id": 13, "name": "御坂美琴" }],
-    "skipped": [{ "index": 2, "realName": "李四", "reason": "REALNAME_EXISTS" }],
-    "errors": [],
-    "total": 2
-  }
-}
+{ "ok": true, "data": { "id": 1 } }
 ```
 
-## **错误：** `401 ADMIN_TOKEN_INVALID` / `400 FIELD_MISSING`（members 为空）/ `400 FIELD_INVALID`（超过 200 条）
+**错误：** `400 FIELD_MISSING`（缺名称）/ `400 FIELD_INVALID`（名称超长、密码 < 6 位）/ `409 REVIEWER_EXISTS` / `401` / `403`
 
-### 4.10 PUT /api/admin/members/{id} — 编辑成员
+---
 
-- **权限：** 管理员
-- **生效方式：** 立即生效
-- **语义：** 部分更新，字段缺省 = 不修改（规则见 §3.2）
-  **请求 Body（全部可选）：**
+### 4.12 PUT /api/admin/reviewers/{id} — 修改审核员
+
+- **权限：** **超级管理员**
+- **语义：** 部分更新；`name`、`password` 均可选，出现即修改（二者都不传 = 无操作，仍返回成功并记审计）。
 
 ```json
-{
-  "realName": "",
-  "name": "新昵称",
-  "generation": "2025",
-  "role": "新职位",
-  "bio": "新简介",
-  "avatar": "https://…",
-  "tags": ["动漫", "音乐"],
-  "social": [{ "name": "GitHub", "url": "https://github.com/xxx" }]
-}
+{ "name": "新的名字", "password": "newpass123" }
 ```
-
-| 字段                      | 语义                                                                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `realName`                | 缺省或空串 = 保持不变（该字段无「清除」语义）；**非空 = 覆盖登记**（旧哈希作废，成员此后须用新姓名验证），覆盖前须做唯一性校验（排除自身） |
-| `name` / `generation`     | 出现则必须非空，否则 `FIELD_INVALID`                                                                                                       |
-| `role` / `bio` / `avatar` | 出现即覆盖，传空串可清空                                                                                                                   |
-| `tags` / `social`         | 出现即整体替换                                                                                                                             |
 
 **成功 200：**
 
@@ -545,24 +578,101 @@ realName 是**只写**字段，全系统唯一入口是管理端成员管理：
 { "ok": true, "data": { "updated": true } }
 ```
 
-## **错误：** `401 ADMIN_TOKEN_INVALID` / `404 MEMBER_NOT_FOUND` / `400 FIELD_INVALID` / `409 REALNAME_EXISTS`
+**错误：** `404 REVIEWER_NOT_FOUND` / `400 FIELD_INVALID`（名称为空/超长、密码 < 6 位）/ `409 REVIEWER_EXISTS`（名称与他人重复）/ `401` / `403`
 
-### 4.11 DELETE /api/admin/members/{id} — 删除成员
+---
 
-- **权限：** 管理员
+### 4.13 DELETE /api/admin/reviewers/{id} — 删除审核员
+
+- **权限：** **超级管理员**
 - **Body：** 无
-  **成功 200：**
+
+**成功 200：**
 
 ```json
 { "ok": true, "data": { "deleted": true } }
 ```
 
-**级联副作用（原子事务）：**
+**级联副作用（同一 `batch` 事务）：** 删除审核员记录，并**吊销其全部会话**（`admin_sessions` 中 `role='reviewer' AND identity=name`）。被删除者持有的旧 token 立即失效。
 
-1. 删除成员记录（含其姓名哈希——该姓名随之释放，可被未来新成员登记）
-2. 该成员所有 pending 提交自动作废：status → `rejected`、reason = `"目标成员已被删除，提交自动作废"`、记录 reviewedAt
-   **错误：** `401 ADMIN_TOKEN_INVALID` / `404 MEMBER_NOT_FOUND`
-   > ⚠️ 非幂等：重复删除同一 id 返回 404（前端已做两步确认与按钮禁用防重）。
+**错误：** `404 REVIEWER_NOT_FOUND` / `401` / `403`
+
+---
+
+### 4.14 GET /api/admin/members — 条目列表（管理端）
+
+- **权限：** **超级管理员**
+- **说明：** 与 `GET /api/members` 返回一致（管理端也**不**额外暴露任何隐藏字段）。
+- **错误：** `401` / `403`
+
+---
+
+### 4.15 POST /api/admin/members — 新增条目（立即生效）
+
+- **权限：** **超级管理员**
+- **生效方式：** 立即生效，**不进入审核流**
+
+**请求 Body：** 与提交白名单一致；`username` / `name` / `crashDate` 必填。
+
+```json
+{
+  "username": "elonmusk",
+  "name": "马斯克",
+  "crashDate": "2025-05-20",
+  "bio": "……",
+  "avatar": "",
+  "tags": ["口嗨"]
+}
+```
+
+**成功 200：**
+
+```json
+{ "ok": true, "data": { "id": 13 } }
+```
+
+**错误：** `400 FIELD_MISSING` / `400 FIELD_INVALID` / `400 FIELD_FORBIDDEN` / `400 CHANGES_EMPTY` / `401` / `403`
+
+---
+
+### 4.16 PUT /api/admin/members/{id} — 修改条目（立即生效）
+
+- **权限：** **超级管理员**
+- **语义：** 部分更新，字段缺省 = 不修改（见 §3.2）。
+
+```json
+{ "crashDate": "2025-05-22", "bio": "新的详情", "tags": ["口嗨", "打脸"] }
+```
+
+**成功 200：**
+
+```json
+{ "ok": true, "data": { "updated": true } }
+```
+
+**错误：** `400 FIELD_INVALID` / `400 FIELD_FORBIDDEN` / `400 CHANGES_EMPTY`（空对象）/ `404 MEMBER_NOT_FOUND` / `401` / `403`
+
+---
+
+### 4.17 DELETE /api/admin/members/{id} — 删除条目
+
+- **权限：** **超级管理员**
+- **Body：** 无
+
+**成功 200：**
+
+```json
+{ "ok": true, "data": { "deleted": true } }
+```
+
+**级联副作用（同一 `batch` 事务）：**
+
+1. 删除条目记录；
+2. 该条目所有 `pending` 建议自动作废：`status → rejected`、`reason = "目标条目已被删除，提交自动作废"`、记录 `reviewed_at`、`reviewed_by`。
+
+**错误：** `404 MEMBER_NOT_FOUND` / `401` / `403`
+
+> ⚠️ 非幂等：重复删除同一 id 返回 404（前端已做两步确认与按钮禁用防重）。
 
 ---
 
@@ -571,90 +681,72 @@ realName 是**只写**字段，全系统唯一入口是管理端成员管理：
 ### 5.1 审核状态机
 
 ```
-                ┌── approve（管理员）──────────> approved（终态，changes 已应用）
+                ┌── approve（审核员/超管）─────> approved（终态，变更已应用）
   pending ──────┤
-                ├── reject（管理员，必填理由）──> rejected（终态）
-                └── 目标成员被删除（自动）─────> rejected（理由固定）
+                ├── reject（审核员/超管，必填理由）─> rejected（终态）
+                └── 目标条目被删除（自动）──────> rejected（理由固定）
 ```
 
-- `approved` / `rejected` 为终态，再次操作返回 `409 ALREADY_REVIEWED`
-- 无撤回、无重新打开操作
+- `approved` / `rejected` 为终态，再次操作返回 `409 ALREADY_REVIEWED`。
+- 无撤回、无重新打开操作。
 
 ### 5.2 并发与一致性规则
 
-| 场景                                   | 行为                                                                                                            |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| 同一成员存在多个 pending 提交          | 允许；按审核先后逐个应用，后审先的覆盖先审先的（last-write-wins）                                               |
-| 提交后、审核前，管理员已直接编辑该成员 | approve 时 changes 仍全量应用（覆盖管理员的中间修改）；oldData 是提交时刻快照，可能与审核时刻的「当前值」不一致 |
-| 审核通过时成员已被删除                 | 拒绝应用，返回 `404 MEMBER_NOT_FOUND`                                                                           |
-| 删除成员与审核并发                     | 删除事务级联作废 pending；已终态的记录不受影响                                                                  |
+| 场景                                     | 行为                                                                                                        |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 同一目标条目存在多个 pending 提交        | 允许；按审核先后逐个应用，后审覆盖先审（last-write-wins）                                                   |
+| 提交后、审核前，超管已直接编辑该条目     | approve 时 `changes` 仍全量应用（覆盖中间修改）；`oldData` 是提交时刻快照，可能与审核时刻的当前值不一致     |
+| approve 时目标条目已被删除               | 拒绝应用，返回 `404 MEMBER_NOT_FOUND`                                                                       |
+| 删除条目与审核并发                       | 删除事务级联作废 pending；已终态记录不受影响                                                                |
+| 审核员被删除后使用旧 token               | 会话已在删除事务中吊销，返回 `401 ADMIN_TOKEN_INVALID`                                                      |
 
 ### 5.3 数据可见性汇总
 
-| 数据                        |         游客         |        管理员        |
-| --------------------------- | :------------------: | :------------------: |
-| 成员公开字段                |          ✓           |          ✓           |
-| 成员 realName（明文或哈希） |          ✗           | ✗（任何接口不返回）  |
-| 提交人身份                  | 仅「已实名验证」标记 | 仅「已实名验证」标记 |
-| 驳回理由                    |          —           |          ✓           |
-| 待审/已审记录               |          ✗           |          ✓           |
+| 数据                        | 游客 | 审核员 | 超级管理员 |
+| --------------------------- | :--: | :----: | :--------: |
+| 条目公开字段                |  ✓   |   ✓    |     ✓      |
+| 待审 / 已审记录             |  ✗   |   ✓    |     ✓      |
+| 驳回理由                    |  ✗   |   ✓    |     ✓      |
+| 审核员密码哈希              |  ✗   |   ✗    |  ✗（任何接口不返回） |
+| 审计日志                    |  ✗   |   ✗    |     ✓      |
 
 ---
 
 ## 6. 安全规范
 
-### 6.1 realName 双哈希存储方案（生产环境必读）
+### 6.1 密码与令牌
 
-**难点：** 真实姓名熵值极低（中文姓名空间可被字典枚举），且业务需要「查重」与「查找」。单一哈希方案无法兼顾，推荐双列：
+| 项            | 方案                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| 超级管理员密码 | 环境变量 `ADMIN_PASSWORD`，登录时恒时比较（`timingSafeEqual`），**不存库**                 |
+| 审核员密码     | PBKDF2-SHA256，10 万轮 + 16 字节随机盐，格式 `pbkdf2$轮数$盐$摘要`，存储于 `reviewers` 表 |
+| adminToken    | 32 字节随机十六进制（`at_` 前缀），会话落 `admin_sessions` 表，可主动吊销，2 小时过期       |
 
-```
-real_name_lookup = SHA-256( realName + SERVER_PEPPER )   ← 确定性哈希
-real_name_verify = argon2id( realName )                  ← 慢哈希
-```
+### 6.2 Cloudflare Turnstile
 
-| 列                 | 用途                                                         | 依赖特性               |
-| ------------------ | ------------------------------------------------------------ | ---------------------- |
-| `real_name_lookup` | 建唯一索引 → 查重（REALNAME_EXISTS）；verify-name 的等值查找 | 确定性（同输入同输出） |
-| `real_name_verify` | 验证时做慢哈希比对                                           | 抗离线爆破             |
+- `POST /api/submissions` 在服务端配置了 `TURNSTILE_SECRET_KEY` 时**强制**校验 `turnstileToken`。
+- 校验请求发往 `https://challenges.cloudflare.com/turnstile/v0/siteverify`，并携带客户端 IP（`CF-Connecting-IP`）。
+- 未配置 `TURNSTILE_SECRET_KEY` 时**完全跳过**校验（便于本地开发）；`GET /api/config` 会告知前端 `turnstileEnabled=false`。
+- `TURNSTILE_SITE_KEY` 通过 `GET /api/config` 下发给前端渲染控件。
 
-**方案取舍：**
+### 6.3 限流策略
 
-- ❌ 只用 bcrypt —— 随机盐导致无法确定性查找与查重
-- ❌ 只用 SHA-256 + pepper —— 库泄露 + pepper 泄露时可被字典爆破；慢哈希列显著抬高成本
-- 🔑 PEPPER 存放于环境变量 / KMS，**绝不入库、不入备份、不写日志、不进代码库**
-  > 降级方案（可接受更高风险时）：单列 `HMAC-SHA256(PEPPER, realName)` + 严格限流（§6.3）
+| 接口                                   | 限制              | 计数键              |
+| -------------------------------------- | ----------------- | ------------------- |
+| `POST /api/admin/login`                | 5 次/分钟/IP      | `admin-login`       |
+| `POST /api/submissions`                | 10 次/小时/IP     | `submissions`       |
 
-### 6.2 明文处理红线
+超限统一返回 `429 RATE_LIMITED`。限流基于 D1 `rate_limits` 计数窗口，写入前先清理窗口外过期记录。
 
-realName 明文仅允许存在于**单个请求的处理内存中**，以下位置严禁出现：
+### 6.4 请求校验
 
-- ❌ **任何日志** —— 包括访问日志的 request body（需配置 body 脱敏或关闭 body 记录）、应用日志、错误堆栈
-- ❌ **任何缓存**（Redis / CDN / 本地缓存）
-- ❌ **任何 API 响应** —— 含管理端、调试端点、错误信息、message 字段
-- ❌ **任何持久化** —— 数据库、消息队列、审计日志、备份
-
-### 6.3 限流策略（强制）
-
-| 接口                | 限制（建议）     | 原因                                                 |
-| ------------------- | ---------------- | ---------------------------------------------------- |
-| `POST /verify-name` | **5 次/分钟/IP** | 最高优先级——哈希无法防御在线枚举，短姓名空间易被穷举 |
-| `POST /admin/login` | 5 次/分钟/IP     | 防密码爆破                                           |
-| `POST /submissions` | 10 次/小时/IP    | 防审核队列被灌水                                     |
-| 其余接口            | 60 次/分钟/IP    | 常规保护                                             |
-
-超限统一返回 `429 RATE_LIMITED`。
-
-### 6.4 其他安全要求
-
-| 项         | 要求                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------ |
-| 传输       | 全站 HTTPS（建议 + HSTS）                                                                        |
-| 管理密码   | bcrypt / argon2id 存储（cost ≥ 10），环境变量注入，不进代码库                                    |
-| 服务端校验 | 所有输入独立校验（前端校验仅为体验）：类型、长度上限、URL 协议白名单（http/https）、标签数量上限 |
-| Body 限制  | 请求体大小上限（如 64KB）                                                                        |
-| adminToken | 服务端维护会话表，支持主动吊销；客户端存 sessionStorage                                          |
-| CORS       | 按部署域名白名单配置                                                                             |
-| 建议扩展   | 管理员操作审计日志（不含 realName）、删除等破坏性操作的二次认证                                  |
+| 项         | 要求                                                                                     |
+| ---------- | ---------------------------------------------------------------------------------------- |
+| 传输       | 全站 HTTPS（建议 + HSTS）                                                                |
+| 请求体     | 上限 64KB，超限 `413 BODY_TOO_LARGE`；必须为 JSON 对象（数组 / 基本类型 → `PARAM_MISSING`） |
+| 服务端校验 | 所有输入独立校验（前端校验仅为体验）：类型、长度上限、URL 协议白名单（http/https）       |
+| 越权防护   | `/admin/audit`、`/admin/reviewers`、`/admin/members` 仅超级管理员；审核员 → `403 FORBIDDEN` |
+| CORS       | 按部署域名白名单配置                                                                     |
 
 ---
 
@@ -662,51 +754,52 @@ realName 明文仅允许存在于**单个请求的处理内存中**，以下位�
 
 ### 7.1 接口速查表
 
-|  #  | 方法   | 路径                            | 权限        | 说明                         |
-| :-: | ------ | ------------------------------- | ----------- | ---------------------------- |
-|  1  | GET    | `/api/members`                  | 公开        | 成员列表（前台数据源）       |
-|  2  | POST   | `/api/verify-name`              | 公开 + 限流 | 姓名验证，签发 verifyToken   |
-|  3  | POST   | `/api/submissions`              | verifyToken | 提交修改（进审核队列）       |
-|  4  | POST   | `/api/admin/login`              | 公开 + 限流 | 后台登录                     |
-|  5  | GET    | `/api/submissions?status=`      | adminToken  | 审核记录列表                 |
-|  6  | POST   | `/api/submissions/{id}/approve` | adminToken  | 通过（应用变更）             |
-|  7  | POST   | `/api/submissions/{id}/reject`  | adminToken  | 驳回（必填理由）             |
-|  8  | GET    | `/api/admin/members`            | adminToken  | 成员列表（管理端）           |
-|  9  | POST   | `/api/admin/members`            | adminToken  | 添加成员（立即生效）         |
-| 10  | PUT    | `/api/admin/members/{id}`       | adminToken  | 编辑成员（立即生效）         |
-| 11  | DELETE | `/api/admin/members/{id}`       | adminToken  | 删除成员（级联作废 pending） |
+|  #  | 方法   | 路径                                      | 权限          | 说明                          |
+| :-: | ------ | ----------------------------------------- | ------------- | ----------------------------- |
+|  1  | GET    | `/api/config`                             | 公开          | Turnstile 开关与站点公钥      |
+|  2  | GET    | `/api/members`                            | 公开          | 翻车条目列表（前台数据源）    |
+|  3  | POST   | `/api/submissions`                        | 公开 + 限流   | 提交新增 / 修改建议           |
+|  4  | GET    | `/api/submissions?status=`                | 审核员 +      | 审核记录列表（别名）          |
+|  5  | POST   | `/api/admin/login`                        | 公开 + 限流   | 统一后台登录                  |
+|  6  | GET    | `/api/admin/me`                           | 审核员 +      | 当前会话 `{ role, identity }` |
+|  7  | GET    | `/api/admin/submissions?status=`          | 审核员 +      | 审核记录列表                  |
+|  8  | POST   | `/api/admin/submissions/{id}/approve`     | 审核员 +      | 通过（应用变更）              |
+|  9  | POST   | `/api/admin/submissions/{id}/reject`      | 审核员 +      | 驳回（必填理由）              |
+| 10  | GET    | `/api/admin/audit?limit=`                 | 超级管理员    | 审计记录（最新在前，≤ 500）   |
+| 11  | GET    | `/api/admin/reviewers`                    | 超级管理员    | 审核员列表                    |
+| 12  | POST   | `/api/admin/reviewers`                    | 超级管理员    | 新增审核员                    |
+| 13  | PUT    | `/api/admin/reviewers/{id}`               | 超级管理员    | 修改审核员名称 / 密码         |
+| 14  | DELETE | `/api/admin/reviewers/{id}`               | 超级管理员    | 删除审核员并吊销其会话        |
+| 15  | GET    | `/api/admin/members`                      | 超级管理员    | 条目列表（管理端）            |
+| 16  | POST   | `/api/admin/members`                      | 超级管理员    | 新增条目（立即生效）          |
+| 17  | PUT    | `/api/admin/members/{id}`                 | 超级管理员    | 修改条目（立即生效）          |
+| 18  | DELETE | `/api/admin/members/{id}`                 | 超级管理员    | 删除条目（级联作废 pending）  |
 
 ### 7.2 客户端行为约定（后端需知悉）
 
-- 收到 `401 ADMIN_TOKEN_INVALID` → 客户端清除令牌、回到后台登录页
-- verify-name 失败时，客户端原样展示 `error.message`（因此 message 需用户友好）
-- 任何管理端成员变更后，客户端会在下次进入前台时重新拉取 `/members`
+- 收到 `401 ADMIN_TOKEN_INVALID` → 客户端清除令牌、回到后台登录页。
+- 所有错误原样展示 `error.message`（因此 message 需用户友好）。
+- 任何管理端条目变更后，客户端会在下次进入前台时重新拉取 `/api/members`。
+- `GET /api/config` 在应用初始化时调用一次，决定是否挂载 Turnstile 控件。
 
 ### 7.3 Mock 演示环境
 
-前端内置 Mock（`USE_MOCK = true`），无需后端即可演示全流程：
+前端内置 Mock 后端（`content/index.html` 中 `const USE_MOCK = true`），无需真实后端即可演示全流程，接口行为与本文档一致：
 
-- **后台密码：** `admin888`
-- **测试真实姓名 ↔ 成员：**
-  | 真实姓名 | 昵称 | 真实姓名 | 昵称 |
-  |---|---|---|---|
-  | 张三 | 御坂美琴 | 周八 | 比企谷八幡 |
-  | 李四 | 立华奏 | 吴九 | 时崎狂三 |
-  | 王五 | 椎名真白 | 郑十 | 五河士道 |
-  | 赵六 | 夏目贵志 | 陈一 | 亚丝娜 |
-  | 孙七 | 雪之下雪乃 | 林二 | 桐人 |
-  | 黄三 | 初音未来 | 徐四 | 洛天依 |
-- Mock 内存中保存明文仅用于模拟哈希比对，对外输出全部剔除，行为与本文档一致
-- 接真实后端：将前端 `USE_MOCK` 改为 `false`，按本文档实现 11 个接口即可，前端零改动
+- **超级管理员密码：** `admin888`
+- **内置审核员：** `审核员甲 / reviewer1`、`审核员乙 / reviewer2`
+- 内置 8 条示例条目；提交建议、审核、审核员管理、条目管理全部可用（数据存在内存，刷新即重置）。
 
-### 7.4 版本演进建议（v2 方向，本期不实现）
+**接入真实后端：** 将 `USE_MOCK` 改为 `false` 后重新部署即可，前端零改动。
+
+### 7.4 版本演进建议（本期不实现）
 
 - [ ] 列表分页：`?page=&pageSize=` → `data: { list, total }`
-- [ ] 按成员查询其提交历史
-- [ ] 审核记录与成员版本号乐观锁（替代 last-write-wins）
-- [ ] verifyToken 绑定来源 IP / 设备指纹
-- [ ] 管理员多账号与操作审计
+- [ ] 按 `username` 查询某人的全部翻车记录
+- [ ] 审核记录与条目版本号乐观锁（替代 last-write-wins）
+- [ ] `turnstileToken` 与提交内容的绑定校验（action / hostname 校验）
+- [ ] 审计日志持久化保留策略与导出
 
 ---
 
-> 📄 文档结束。任何接口行为与本文档冲突时，以本文档为准；如需变更，须同步更新前端 apiFetch 调用侧与错误码处理逻辑。
+> 📄 文档结束。任何接口行为与本文档冲突时，以本文档为准；如需变更，须同步更新 `src/index.js`、前端 `apiFetch` 调用侧与错误码处理逻辑。

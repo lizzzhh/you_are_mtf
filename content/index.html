@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>社团 · 成员时间线</title>
+    <title>X友跨翻车列表</title>
     <script>
         /* 主题初始化（防闪烁）：auto 跟随系统 / light / dark */
         (function () {
@@ -927,7 +927,7 @@
 
         .form-row input[type="text"],
         .form-row input[type="password"],
-        .form-row textarea,
+        .form-row input[type="date"],
         .rej-box input,
         .admin-login input {
             width: 100%;
@@ -953,6 +953,43 @@
             resize: vertical;
             min-height: 72px;
             line-height: 1.6;
+        }
+
+        /* ===== 翻车日期：与文本框统一外观，并美化原生日期选择器 ===== */
+        .form-row input[type="text"],
+        .form-row input[type="password"],
+        .form-row input[type="date"] {
+            min-height: 38px;
+        }
+
+        .form-row input[type="date"] {
+            cursor: pointer;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.3px;
+        }
+
+        .form-row input[type="date"]::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+            padding: 3px;
+            margin-left: 6px;
+            border-radius: 4px;
+            opacity: 0.5;
+            transition: opacity 0.15s ease, background-color 0.15s ease;
+        }
+
+        .form-row input[type="date"]:hover::-webkit-calendar-picker-indicator,
+        .form-row input[type="date"]:focus::-webkit-calendar-picker-indicator {
+            opacity: 1;
+            background-color: var(--surface-2);
+        }
+
+        .form-row input[type="date"]::-webkit-datetime-edit-month-field:focus,
+        .form-row input[type="date"]::-webkit-datetime-edit-day-field:focus,
+        .form-row input[type="date"]::-webkit-datetime-edit-year-field:focus {
+            background: var(--surface-2);
+            color: var(--text-strong);
+            outline: none;
+            border-radius: 2px;
         }
 
         .form-hint {
@@ -1516,6 +1553,179 @@
             }
         }
 
+        /* ===== 翻车列表 · 条目扩展信息 ===== */
+        .expand-username {
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--text-soft);
+            letter-spacing: 0.2px;
+            text-align: center;
+            margin-bottom: 2px;
+            word-break: break-all;
+        }
+
+        .expand-date {
+            align-self: center;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-mid);
+            background: var(--surface-2);
+            border: 1px solid var(--border-4);
+            padding: 4px 12px;
+            letter-spacing: 0.3px;
+            margin-bottom: 2px;
+        }
+
+        .expand-date::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            flex-shrink: 0;
+        }
+
+        /* ===== 人机验证 / 提示 ===== */
+        .turnstile-wrap {
+            margin: 12px 0 4px;
+            min-height: 0;
+        }
+
+        .hint-box {
+            font-size: 12.5px;
+            line-height: 1.7;
+            color: var(--text-soft);
+            background: var(--surface-3);
+            border: 1px solid var(--border-3);
+            padding: 10px 14px;
+            margin-bottom: 16px;
+        }
+
+        .hint-box b {
+            color: var(--text-strong);
+        }
+
+        /* ===== 后台：身份标识 ===== */
+        .admin-who {
+            font-size: 12.5px;
+            color: var(--text-soft);
+            border: 1px solid var(--border-2);
+            background: var(--surface-3);
+            padding: 4px 14px;
+            white-space: nowrap;
+        }
+
+        .admin-who b {
+            color: var(--text-strong);
+        }
+
+        /* ===== 后台：审核记录 ===== */
+        .audit-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .audit-row {
+            background: var(--surface);
+            border: 1px solid var(--border-3);
+            padding: 10px 14px;
+            display: flex;
+            gap: 12px;
+            align-items: baseline;
+            flex-wrap: wrap;
+            font-size: 13px;
+        }
+
+        .audit-actor {
+            font-weight: 600;
+            color: var(--text-strong);
+            white-space: nowrap;
+        }
+
+        .audit-role {
+            font-size: 11px;
+            color: var(--text-faint);
+            border: 1px solid var(--border-3);
+            padding: 1px 8px;
+            white-space: nowrap;
+        }
+
+        .audit-action {
+            color: var(--text-mid);
+            word-break: break-word;
+        }
+
+        .audit-detail {
+            color: var(--text-faint);
+            word-break: break-all;
+        }
+
+        .audit-time {
+            margin-left: auto;
+            color: var(--text-faint);
+            font-size: 12px;
+            white-space: nowrap;
+        }
+
+        /* ===== 后台：审核员 ===== */
+        .reviewer-card {
+            background: var(--surface);
+            border: 1px solid var(--border-3);
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .reviewer-info {
+            flex: 1;
+            min-width: 160px;
+        }
+
+        .reviewer-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-strong);
+        }
+
+        .reviewer-sub {
+            font-size: 12.5px;
+            color: var(--text-soft);
+            margin-top: 2px;
+        }
+
+        .reviewer-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .reviewer-form {
+            background: var(--surface-3);
+            border: 1px solid var(--border-3);
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            display: grid;
+            grid-template-columns: 1fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+        }
+
+        .reviewer-form .form-row {
+            margin-bottom: 0;
+        }
+
+        @media (max-width: 700px) {
+            .reviewer-form {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (prefers-reduced-motion: reduce) {
 
             .expand-card,
@@ -1538,10 +1748,10 @@
         <!-- ================= 前台主视图 ================= -->
         <div id="viewMain" class="view">
             <div class="hero">
-                <div class="logo-circle"><span>社</span></div>
+                <div class="logo-circle"><span>翻</span></div>
                 <div class="hero-title">
-                    <h1>星轨Timeline</h1>
-                    <div class="sub">动漫 · 创作 · 热爱 · 无限</div>
+                    <h1>X友跨翻车列表</h1>
+                    <div class="sub">翻车实录 · 一条条记下来</div>
                 </div>
                 <div class="hero-actions">
                     <div class="theme-switch" role="group" aria-label="主题切换">
@@ -1556,7 +1766,7 @@
                 <div class="toolbar-right">
                     <span class="count-badge" id="countBadge">—</span>
                     <button class="reset-btn" id="resetFilterBtn">全部显示</button>
-                    <button class="reset-btn" id="editOpenBtn">✎ 修改资料</button>
+                    <button class="reset-btn" id="addOpenBtn">＋ 添加条目</button>
                     <a class="reset-btn" href="#/admin">后台管理</a>
                 </div>
             </div>
@@ -1569,7 +1779,7 @@
                 <div class="logo-circle"><span>审</span></div>
                 <div class="hero-title">
                     <h1>后台管理</h1>
-                    <div class="sub">资料审核 · 成员管理</div>
+                    <div class="sub">建议审核 · 审核记录 · 权限管理</div>
                 </div>
                 <div class="hero-actions">
                     <div class="theme-switch" role="group" aria-label="主题切换">
@@ -1584,7 +1794,7 @@
             <!-- 未登录：密码验证 -->
             <div id="adminLoginView" class="view">
                 <div class="admin-login">
-                    <p class="admin-login-tip">请输入管理密码进入后台。</p>
+                    <p class="admin-login-tip">请输入密码进入后台。系统会自动识别超级管理员或审核员身份。</p>
                     <div class="form-row">
                         <input type="password" id="adminPasswordInput" placeholder="管理密码"
                             autocomplete="current-password" />
@@ -1601,9 +1811,12 @@
                         <button class="filter-btn active" data-tab="pending">待审核</button>
                         <button class="filter-btn" data-tab="approved">已通过</button>
                         <button class="filter-btn" data-tab="rejected">已驳回</button>
-                        <button class="filter-btn" data-tab="members">成员管理</button>
+                        <button class="filter-btn" data-tab="audit" data-super="1" hidden>审核记录</button>
+                        <button class="filter-btn" data-tab="reviewers" data-super="1" hidden>审核员管理</button>
+                        <button class="filter-btn" data-tab="members" data-super="1" hidden>条目管理</button>
                     </div>
                     <div class="toolbar-right">
+                        <span class="admin-who" id="adminWho" hidden></span>
                         <button class="reset-btn" id="adminLogoutBtn">退出登录</button>
                     </div>
                 </div>
@@ -1622,154 +1835,105 @@
             <div class="expand-header">
                 <div class="expand-avatar" id="expandAvatar"></div>
                 <div class="expand-name" id="expandName">—</div>
+                <div class="expand-username" id="expandUsername"></div>
             </div>
             <div class="expand-details">
-                <div class="expand-role" id="expandRole">—</div>
+                <div class="expand-date" id="expandDate">—</div>
                 <hr class="expand-divider" />
                 <div class="expand-bio" id="expandBio">—</div>
                 <div class="expand-tags" id="expandTags"></div>
                 <div class="expand-social" id="expandSocial"></div>
-                <button type="button" class="expand-edit-btn" id="expandEditBtn">✎ 申请修改资料</button>
+                <button type="button" class="expand-edit-btn" id="expandEditBtn">✎ 提交修改建议</button>
             </div>
         </div>
     </div>
 
-    <!-- 编辑资料模态（前台 · 走审核流程） -->
+    <!-- 提交条目模态（前台 · 新增 / 修改建议，走审核流程） -->
     <div class="modal" id="editModal">
         <div class="modal-box">
             <div class="modal-head">
-                <span>修改资料</span>
+                <span id="editModalTitle">添加条目</span>
                 <button class="modal-close" id="editModalClose">✕</button>
             </div>
             <div class="modal-body">
-                <div id="editStepVerify">
-                    <p class="step-tip">为确认你是本人，请先输入社团登记的<b>真实姓名</b>进行验证。验证通过后可修改资料，修改内容将提交后台等待审核。</p>
-                    <div class="form-row">
-                        <label>真实姓名</label>
-                        <input type="text" id="verifyNameInput" placeholder="请输入真实姓名" autocomplete="off" />
-                    </div>
-                    <div class="form-error" id="verifyError"></div>
-                    <div class="form-actions">
-                        <button class="btn-primary" id="verifySubmitBtn">验 证</button>
-                    </div>
+                <p class="step-tip" id="editModalTip"></p>
+                <div class="hint-box">
+                    <b>如何获取头像链接？</b>在 X（Twitter）打开想添加的用户主页，按 <b>F12</b> 打开开发者工具，
+                    在 Elements 面板中找到头像 <code>&lt;img&gt;</code> 标签，复制其 <code>src</code> 链接并粘贴到下方。
                 </div>
-
-                <div id="editStepForm" hidden>
-                    <p class="step-tip">正在修改 <b id="editTargetName">—</b> 的资料。提交后需管理员审核通过才会生效。</p>
-                    <div class="form-row">
-                        <label>昵称</label>
-                        <input type="text" id="efName" />
-                    </div>
-                    <div class="form-row">
-                        <label>届（年份）</label>
-                        <input type="text" id="efGeneration" placeholder="如 2025" />
-                    </div>
-                    <div class="form-row">
-                        <label>职位</label>
-                        <input type="text" id="efRole" />
-                    </div>
-                    <div class="form-row">
-                        <label>头像 URL</label>
-                        <input type="text" id="efAvatar" placeholder="留空则使用昵称首字" />
-                    </div>
-                    <div class="form-row">
-                        <label>简介</label>
-                        <textarea id="efBio"></textarea>
-                    </div>
-                    <div class="form-row">
-                        <label>标签</label>
-                        <input type="text" id="efTags" placeholder="动漫, 绘画, 音乐" />
-                        <div class="form-hint">多个标签用逗号分隔</div>
-                    </div>
-                    <div class="form-row">
-                        <label>社交链接</label>
-                        <div id="efSocialRows"></div>
-                        <button type="button" class="btn-ghost" id="efAddSocial">＋ 添加链接</button>
-                    </div>
-                    <div class="form-error" id="editSubmitError"></div>
-                    <div class="form-actions">
-                        <button class="btn-ghost" id="editBackBtn">← 重新验证</button>
-                        <button class="btn-primary" id="editSubmitBtn">提交审核</button>
-                    </div>
+                <div class="form-row">
+                    <label>X 用户名 *</label>
+                    <input type="text" id="efUsername" placeholder="如 elonmusk（可含 @）" autocomplete="off" />
+                </div>
+                <div class="form-row">
+                    <label>昵称 *</label>
+                    <input type="text" id="efName" />
+                </div>
+                <div class="form-row">
+                    <label>翻车日期 *</label>
+                    <input type="date" id="efCrashDate" />
+                </div>
+                <div class="form-row">
+                    <label>头像 URL</label>
+                    <input type="text" id="efAvatar" placeholder="粘贴 F12 找到的头像链接，留空则用昵称首字" />
+                </div>
+                <div class="form-row">
+                    <label>翻车详情</label>
+                    <textarea id="efBio" placeholder="发生了什么？"></textarea>
+                </div>
+                <div class="form-row">
+                    <label>标签</label>
+                    <input type="text" id="efTags" placeholder="翻车, 吃糖" />
+                    <div class="form-hint">多个标签用逗号分隔，最多 8 个</div>
+                </div>
+                <div class="turnstile-wrap" id="efTurnstile"></div>
+                <div class="form-error" id="editSubmitError"></div>
+                <div class="form-actions">
+                    <button class="btn-ghost" id="editCancelBtn">取 消</button>
+                    <button class="btn-primary" id="editSubmitBtn">提交审核</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 成员编辑模态（后台 · 立即生效） -->
+    <!-- 条目编辑模态（后台 · 超级管理员 · 立即生效） -->
     <div class="modal" id="memberModal">
         <div class="modal-box">
             <div class="modal-head">
-                <span id="memberModalTitle">添加成员</span>
+                <span id="memberModalTitle">添加条目</span>
                 <button class="modal-close" id="memberModalClose">✕</button>
             </div>
             <div class="modal-body">
                 <p class="step-tip" id="memberModalTip"></p>
-                <div class="form-row write-only-field">
-                    <label>真实姓名 *</label>
-                    <input type="text" id="mfRealName" placeholder="如：张三" autocomplete="off" />
-                    <div class="form-hint" id="mfRealNameHint"></div>
+                <div class="form-row">
+                    <label>X 用户名 *</label>
+                    <input type="text" id="mfUsername" placeholder="如 elonmusk（可含 @）" autocomplete="off" />
                 </div>
                 <div class="form-row">
                     <label>昵称 *</label>
                     <input type="text" id="mfName" />
                 </div>
                 <div class="form-row">
-                    <label>届（年份）*</label>
-                    <input type="text" id="mfGeneration" placeholder="如 2025" />
-                </div>
-                <div class="form-row">
-                    <label>职位</label>
-                    <input type="text" id="mfRole" />
+                    <label>翻车日期 *</label>
+                    <input type="date" id="mfCrashDate" />
                 </div>
                 <div class="form-row">
                     <label>头像 URL</label>
                     <input type="text" id="mfAvatar" placeholder="留空则使用昵称首字" />
                 </div>
                 <div class="form-row">
-                    <label>简介</label>
+                    <label>翻车详情</label>
                     <textarea id="mfBio"></textarea>
                 </div>
                 <div class="form-row">
                     <label>标签</label>
-                    <input type="text" id="mfTags" placeholder="动漫, 绘画, 音乐" />
-                    <div class="form-hint">多个标签用逗号分隔</div>
-                </div>
-                <div class="form-row">
-                    <label>社交链接</label>
-                    <div id="mfSocialRows"></div>
-                    <button type="button" class="btn-ghost" id="mfAddSocial">＋ 添加链接</button>
+                    <input type="text" id="mfTags" placeholder="翻车, 吃糖" />
+                    <div class="form-hint">多个标签用逗号分隔，最多 8 个</div>
                 </div>
                 <div class="form-error" id="memberFormError"></div>
                 <div class="form-actions">
                     <button class="btn-ghost" id="memberCancelBtn">取 消</button>
                     <button class="btn-primary" id="memberSaveBtn">保 存</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 批量导入成员模态（后台） -->
-    <div class="modal" id="batchModal">
-        <div class="modal-box">
-            <div class="modal-head">
-                <span>批量导入成员</span>
-                <button class="modal-close" id="batchModalClose">✕</button>
-            </div>
-            <div class="modal-body">
-                <p class="step-tip">每行一位成员，字段用逗号分隔，可省略首行表头。标签用 <b>|</b> 分隔。</p>
-                <p class="step-tip" style="margin-top:-6px;color:#9aa6b5;font-size:13px;">
-                    格式：真实姓名,昵称,届别,职位,简介,头像URL,标签1|标签2
-                </p>
-                <div class="form-row">
-                    <textarea id="batchInput" rows="8"
-                        placeholder="张三,御坂美琴,2025,社长,简介…,https://…,动漫|游戏&#10;李四,立华奏,2025,副社长,简介…,,绘画|音乐"></textarea>
-                </div>
-                <div class="form-error" id="batchError"></div>
-                <div id="batchResult" class="batch-result" hidden></div>
-                <div class="form-actions">
-                    <button class="btn-ghost" id="batchCancelBtn">取 消</button>
-                    <button class="btn-primary" id="batchImportBtn">导 入</button>
                 </div>
             </div>
         </div>
@@ -1785,92 +1949,63 @@
             /* ============================================================
                ★ 配置 ★
                USE_MOCK = true  ：内置 mock 后端（无需服务器即可演示）
-               USE_MOCK = false ：请求真实后端（按文末 API 约定实现）
+               USE_MOCK = false ：请求真实后端（部署上线请改为 false）
+
+               ⚠️ 部署到 Cloudflare 后，务必将 USE_MOCK 改为 false，
+                  否则前端不会调用真实 Worker / D1。
                ============================================================ */
             const USE_MOCK = false;
             const API_BASE = '/api';
 
-            /* Mock 凭据：后台密码 admin888
-               真实姓名内嵌在各成员 realName 字段（仅 mock 内存持有，
-               对外任何接口一律剔除——模拟生产环境的哈希存储）：
-               张三→御坂美琴、李四→立华奏、王五→椎名真白、赵六→夏目贵志、
-               孙七→雪之下雪乃、周八→比企谷八幡、吴九→时崎狂三、郑十→五河士道、
-               陈一→亚丝娜、林二→桐人、黄三→初音未来、徐四→洛天依
-               新增成员使用添加时填写的真实姓名。 */
+            /* Mock 凭据（仅 USE_MOCK = true 时生效）：
+               - 超级管理员密码：admin888
+               - 内置审核员：审核员甲 / reviewer1、审核员乙 / reviewer2 */
             const MOCK_ADMIN_PASSWORD = 'admin888';
+            const MOCK_REVIEWERS = [
+                { id: 1, name: '审核员甲', password: 'reviewer1' },
+                { id: 2, name: '审核员乙', password: 'reviewer2' }
+            ];
 
             const MOCK_MEMBERS = [{
-                id: 1, realName: '张三', name: '御坂美琴', generation: '2025', role: '社长 · 电击使',
-                bio: '常盘台中学王牌，超电磁炮使用者。喜欢呱太，正义感爆棚。',
-                tags: ['动漫', '游戏', 'cosplay', '音乐'],
-                social: [{ name: '哔哩哔哩', url: 'https://bilibili.com/misaka' }, { name: 'Twitter', url: 'https://twitter.com/misaka_mikoto' }, { name: 'Instagram', url: 'https://instagram.com/misaka' }],
+                id: 1, username: 'misaka_mikoto', name: '御坂美琴', crashDate: '2025-05-20',
+                bio: '直播时把「超电磁炮」念成「超电磁炉」，当场被弹幕笑翻。',
+                tags: ['直播翻车', '口播失误'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Misaka'
             }, {
-                id: 2, realName: '李四', name: '立华奏', generation: '2025', role: '副社长 · 天使',
-                bio: '沉默寡言但内心温柔，擅长使用音速剑。喜欢麻婆豆腐。',
-                tags: ['动漫', '绘画', '音乐', '美食'],
-                social: [{ name: 'pixiv', url: 'https://pixiv.net/kanade' }, { name: 'SoundCloud', url: 'https://soundcloud.com/kanade' }],
+                id: 2, username: 'kanade_tachibana', name: '立华奏', crashDate: '2025-05-03',
+                bio: '发推宣布退圈，三小时后删除并改口「只是去吃饭」。',
+                tags: ['打脸', '退圈'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Kanade'
             }, {
-                id: 3, realName: '王五', name: '椎名真白', generation: '2024', role: '美术指导',
-                bio: '天才画家，生活自理能力为零。对绘画有着纯粹的执着。',
-                tags: ['绘画', '动漫', '设计', '手工'],
-                social: [{ name: 'ArtStation', url: 'https://artstation.com/mashiro' }, { name: '微博', url: 'https://weibo.com/mashiro' }],
+                id: 3, username: 'mashiro_shiina', name: '椎名真白', crashDate: '2025-04-18',
+                bio: '晒画作被扒出是描图，原作者在评论区贴出叠图对比。',
+                tags: ['描图', '抄袭'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Mashiro'
             }, {
-                id: 4, realName: '赵六', name: '夏目贵志', generation: '2024', role: '文案 · 故事',
-                bio: '能看见妖怪的少年，温柔而坚强。喜欢记录人与妖之间的故事。',
-                tags: ['读书', '写作', '动漫', '旅行'],
-                social: [{ name: 'note', url: 'https://note.com/natsume' }, { name: '豆瓣', url: 'https://douban.com/people/natsume' }],
+                id: 4, username: 'natsume_takashi', name: '夏目贵志', crashDate: '2024-12-31',
+                bio: '跨年感言里把合作方的名字写错，还 @ 了错误的人。',
+                tags: ['社死', '跨年'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Natsume'
             }, {
-                id: 5, realName: '孙七', name: '雪之下雪乃', generation: '2023', role: '策划 · 逻辑',
-                bio: '冷静理性的完美主义者，喜欢猫和古典文学。',
-                tags: ['读书', '设计', '科技', '动漫'],
-                social: [{ name: 'Twitter', url: 'https://twitter.com/yukino' }, { name: 'GitHub', url: 'https://github.com/yukino' }],
+                id: 5, username: 'yukinoshita_y', name: '雪之下雪乃', crashDate: '2024-09-09',
+                bio: '发长文讲时间管理，被网友发现同一分钟点赞了二十条无关内容。',
+                tags: ['人设崩塌', '时间管理'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Yukino'
             }, {
-                id: 6, realName: '周八', name: '比企谷八幡', generation: '2023', role: '运营 · 观察',
-                bio: '孤僻但洞察力极强，擅长用毒舌看透本质。',
-                tags: ['写作', '动漫', '游戏', '摄影'],
-                social: [{ name: 'GitHub', url: 'https://github.com/hachiman' }],
+                id: 6, username: 'hachiman_h', name: '比企谷八幡', crashDate: '2024-07-14',
+                bio: '毒舌点评他人「不配」，结果自己的旧发言被截图反噬。',
+                tags: ['双标', '挖坟'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Hachiman'
             }, {
-                id: 7, realName: '吴九', name: '时崎狂三', generation: '2022', role: '活动策划',
-                bio: '精灵中的最恶精灵，神秘而优雅。时间系能力者。',
-                tags: ['cosplay', '动漫', '音乐', '美食'],
-                social: [{ name: 'Instagram', url: 'https://instagram.com/kurumi' }, { name: '哔哩哔哩', url: 'https://bilibili.com/kurumi' }],
+                id: 7, username: 'kurumi_tokisaki', name: '时崎狂三', crashDate: '2024-03-02',
+                bio: '直播打游戏连输十把，怒摔键盘后强装淡定说「在测试设备」。',
+                tags: ['直播翻车', '嘴硬'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Kurumi'
             }, {
-                id: 8, realName: '郑十', name: '五河士道', generation: '2022', role: '后勤 · 支援',
-                bio: '温柔可靠的哥哥型，擅长照顾他人。',
-                tags: ['美食', '动漫', '游戏', '烘焙'],
-                social: [{ name: 'Twitter', url: 'https://twitter.com/shido' }, { name: '下厨房', url: 'https://xiachufang.com/cook/shido' }],
+                id: 8, username: 'shido_itsuka', name: '五河士道', crashDate: '2023-11-11',
+                bio: '声称纯手工做的蛋糕，背景里露出超市包装盒。',
+                tags: ['摆拍', '穿帮'],
                 avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Shido'
-            }, {
-                id: 9, realName: '陈一', name: '亚丝娜', generation: '2025', role: '设计 · 料理',
-                bio: '闪光亚丝娜，SAO攻略组副团长。现实中的料理达人。',
-                tags: ['美食', '动漫', '游戏', '烘焙'],
-                social: [{ name: '下厨房', url: 'https://xiachufang.com/cook/asuna' }, { name: 'Instagram', url: 'https://instagram.com/asuna' }, { name: 'Twitter', url: 'https://twitter.com/asuna' }],
-                avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Asuna'
-            }, {
-                id: 10, realName: '林二', name: '桐人', generation: '2024', role: '技术 · 开发',
-                bio: '黑色剑士，SAO攻略组最强者。双重世界的生活者。',
-                tags: ['游戏', '编程', '科技', '动漫'],
-                social: [{ name: 'GitHub', url: 'https://github.com/kirito' }, { name: '哔哩哔哩', url: 'https://bilibili.com/kirito' }],
-                avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Kirito'
-            }, {
-                id: 11, realName: '黄三', name: '初音未来', generation: '2023', role: '音乐 · 声乐',
-                bio: '虚拟歌姬，用歌声传递快乐与希望。',
-                tags: ['音乐', '动漫', '配音', '设计'],
-                social: [{ name: 'SoundCloud', url: 'https://soundcloud.com/miku' }, { name: 'Twitter', url: 'https://twitter.com/miku' }, { name: '哔哩哔哩', url: 'https://bilibili.com/miku' }],
-                avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Miku'
-            }, {
-                id: 12, realName: '徐四', name: '洛天依', generation: '2022', role: '音乐 · 创作',
-                bio: '中国虚拟歌姬，喜欢古风与电子音乐。',
-                tags: ['音乐', '动漫', '写作', '设计'],
-                social: [{ name: '哔哩哔哩', url: 'https://bilibili.com/luotianyi' }, { name: '网易云音乐', url: 'https://music.163.com/luotianyi' }, { name: '微博', url: 'https://weibo.com/luotianyi' }],
-                avatar: 'https://api.dicebear.com/7.x/thumbs/svg?seed=Luotianyi'
             }];
 
             /* ============================================================
@@ -1894,105 +2029,143 @@
             }
 
             /* ============================================================
-               Mock 后端
-               ------------------------------------------------------------
-               realName 模拟策略：
-               - mock 内存中保存明文（仅为了模拟哈希比对）
-               - 任何 API 响应都通过 publicMember() 剔除该字段
-                 （等价于生产环境"只存哈希、明文不可恢复"）
+               Mock 后端（仅 USE_MOCK = true 时生效）
+               内存实现，行为对齐真实 Worker：提交需审核；审核员 / 超管统一密码登录；Turnstile 直接放行。
                ============================================================ */
             const mockDb = {
                 members: deepCopy(MOCK_MEMBERS),
                 submissions: [],
+                reviewers: MOCK_REVIEWERS.map(r => ({ id: r.id, name: r.name, password: r.password, createdAt: new Date().toISOString() })),
+                audits: [],
+                sessions: new Map(),
                 nextSubId: 1,
-                nextMemberId: 13,
-                verifyTokens: new Map(),
-                adminTokens: new Set()
+                nextMemberId: 9,
+                nextReviewerId: 3
             };
+
+            const MOCK_WHITELIST = ['username', 'name', 'crashDate', 'bio', 'avatar', 'tags'];
 
             function getMockMember(id) {
                 return mockDb.members.find(m => m.id === Number(id));
             }
-            function requireMockAdmin(token) {
-                if (!token || !mockDb.adminTokens.has(token)) {
-                    throw apiErr(401, 'ADMIN_TOKEN_INVALID', '后台登录已失效，请重新登录');
-                }
+            function mockSession(token) {
+                const s = token ? mockDb.sessions.get(token) : null;
+                if (!s) throw apiErr(401, 'ADMIN_TOKEN_INVALID', '后台登录已失效，请重新登录');
+                return s;
             }
-            /* ★ 只进不出：对外输出成员时剔除 realName */
+            function mockSuper(token) {
+                const s = mockSession(token);
+                if (s.role !== 'super') throw apiErr(403, 'FORBIDDEN', '该操作仅超级管理员可用');
+                return s;
+            }
+            function mockAudit(role, identity, action, target, detail) {
+                mockDb.audits.push({
+                    id: mockDb.audits.length + 1,
+                    actor: identity, actorRole: role, action,
+                    target: target || '', detail: detail || '', createdAt: new Date().toISOString()
+                });
+            }
+            /* 对外输出条目（不含内部字段） */
             function publicMember(m) {
-                const copy = deepCopy(m);
-                delete copy.realName;
-                return copy;
+                return {
+                    id: m.id, username: m.username, name: m.name, crashDate: m.crashDate,
+                    bio: m.bio || '', avatar: m.avatar || '', tags: m.tags || []
+                };
             }
-            /* 真实姓名查重（生产环境：对确定性哈希建唯一索引） */
-            function realNameTaken(realName, excludeId) {
-                return mockDb.members.some(m => m.id !== excludeId && m.realName === realName);
+            function mockNormalizeUsername(raw) {
+                let s = String(raw == null ? '' : raw).trim();
+                if (!s) return '';
+                s = s.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+                const mm = s.match(/^(?:x\.com|twitter\.com|mobile\.twitter\.com)\/([^/?#\s]+)/i);
+                if (mm) s = mm[1];
+                return s.replace(/^@+/, '').replace(/[/?#].*$/, '').toLowerCase();
+            }
+            function mockNormUrl(u) {
+                const t = String(u == null ? '' : u).trim();
+                if (!t) return '';
+                if (/^https?:\/\//i.test(t)) return t;
+                if (t.startsWith('//')) return 'https:' + t;
+                return 'https://' + t;
+            }
+            function mockSanitize(c) {
+                const out = {};
+                if ('username' in c) out.username = mockNormalizeUsername(c.username);
+                if ('name' in c) out.name = String(c.name).trim();
+                if ('crashDate' in c) out.crashDate = String(c.crashDate).trim();
+                if ('bio' in c) out.bio = String(c.bio);
+                if ('avatar' in c) out.avatar = mockNormUrl(c.avatar);
+                if ('tags' in c) out.tags = (Array.isArray(c.tags) ? c.tags : []).map(t => String(t).trim()).filter(Boolean).slice(0, 8);
+                return out;
+            }
+            function mockValidateChanges(type, changes) {
+                if (!changes || typeof changes !== 'object' || Array.isArray(changes)) throw apiErr(400, 'CHANGES_EMPTY', '提交内容格式不正确');
+                const keys = Object.keys(changes);
+                if (!keys.length) throw apiErr(400, 'CHANGES_EMPTY', '没有检测到修改内容');
+                keys.forEach(k => { if (!MOCK_WHITELIST.includes(k)) throw apiErr(400, 'FIELD_FORBIDDEN', '字段 "' + k + '" 不允许提交'); });
+                if (type === 'create') {
+                    if (!String(changes.username || '').trim()) throw apiErr(400, 'FIELD_MISSING', '缺少必填字段 用户名');
+                    if (!String(changes.name || '').trim()) throw apiErr(400, 'FIELD_MISSING', '缺少必填字段 昵称');
+                    if (!String(changes.crashDate || '').trim()) throw apiErr(400, 'FIELD_MISSING', '缺少必填字段 翻车日期');
+                }
+                if ('username' in changes && !/^[a-z0-9_]{1,15}$/.test(mockNormalizeUsername(changes.username))) throw apiErr(400, 'FIELD_INVALID', '用户名格式不正确（1-15 位字母、数字或下划线）');
+                if ('name' in changes && !String(changes.name).trim()) throw apiErr(400, 'FIELD_INVALID', '昵称不能为空');
+                if ('name' in changes && String(changes.name).trim().length > 32) throw apiErr(400, 'FIELD_INVALID', '昵称不能超过 32 个字符');
+                if ('crashDate' in changes && !/^\d{4}-\d{2}-\d{2}$/.test(String(changes.crashDate).trim())) throw apiErr(400, 'FIELD_INVALID', '翻车日期格式应为 YYYY-MM-DD');
+                if ('avatar' in changes && changes.avatar) {
+                    const a = String(changes.avatar).trim();
+                    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(a) && !/^https?:\/\//i.test(a)) throw apiErr(400, 'FIELD_INVALID', '头像链接格式不正确');
+                }
+                if ('tags' in changes && (!Array.isArray(changes.tags) || changes.tags.length > 8)) throw apiErr(400, 'FIELD_INVALID', '标签最多 8 个');
+                if ('tags' in changes && Array.isArray(changes.tags) && changes.tags.some(t => String(t).trim().length > 24)) throw apiErr(400, 'FIELD_INVALID', '单个标签不能超过 24 个字符');
             }
 
             function handleMock(path, method, body, token) {
                 const [p, qs] = path.split('?');
                 const q = new URLSearchParams(qs || '');
-                const m = p.match(/^\/admin\/submissions\/(\d+)\/(approve|reject)$/);
+                const sm = p.match(/^\/admin\/submissions\/(\d+)\/(approve|reject)$/);
+                const rm = p.match(/^\/admin\/reviewers\/(\d+)$/);
                 const mm = p.match(/^\/admin\/members\/(\d+)$/);
 
                 /* ---------- 公开接口 ---------- */
 
-                // GET /members —— 剔除 realName
+                // GET /config
+                if (method === 'GET' && p === '/config') {
+                    return { turnstileEnabled: false, turnstileSiteKey: '' };
+                }
+
+                // GET /members
                 if (method === 'GET' && p === '/members') {
-                    return mockDb.members.map(publicMember);
+                    return mockDb.members
+                        .slice()
+                        .sort((a, b) => String(b.crashDate).localeCompare(String(a.crashDate)) || b.id - a.id)
+                        .map(publicMember);
                 }
 
-                // POST /verify-name —— 哈希比对（mock 用明文比对模拟）
-                if (method === 'POST' && p === '/verify-name') {
-                    const realName = ((body && body.realName) || '').trim();
-                    const memberId = body ? body.memberId : undefined;
-                    if (!realName) throw apiErr(400, 'PARAM_MISSING', '请输入真实姓名');
-                    const found = mockDb.members.find(x => x.realName === realName);
-                    if (!found) throw apiErr(401, 'NAME_NOT_FOUND', '该姓名不在社团登记名单中');
-                    if (memberId != null && found.id !== Number(memberId)) {
-                        throw apiErr(403, 'NAME_MISMATCH', '该姓名与目标成员不匹配，无法修改他人资料');
-                    }
-                    const vt = 'vt_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-                    mockDb.verifyTokens.set(vt, { memberId: found.id, expires: Date.now() + 5 * 60 * 1000 });
-                    return {
-                        memberId: found.id,
-                        verifyToken: vt,
-                        member: publicMember(found) // 不含 realName
-                    };
-                }
-
-                // POST /submissions —— 提交修改（verifyToken 一次性）
+                // POST /submissions —— 任何人提交新增 / 修改建议
                 if (method === 'POST' && p === '/submissions') {
-                    const vt = body && body.verifyToken;
-                    const changes = body && body.changes;
-                    const rec = mockDb.verifyTokens.get(vt);
-                    if (!rec) throw apiErr(401, 'TOKEN_INVALID', '验证已失效，请重新验证姓名');
-                    if (Date.now() > rec.expires) {
-                        mockDb.verifyTokens.delete(vt);
-                        throw apiErr(401, 'TOKEN_EXPIRED', '验证已过期，请重新验证姓名');
-                    }
-                    if (!changes || typeof changes !== 'object' || Array.isArray(changes) || !Object.keys(changes).length) {
-                        throw apiErr(400, 'CHANGES_EMPTY', '没有可提交的修改');
-                    }
-                    if (changes.name != null && !String(changes.name).trim()) throw apiErr(400, 'FIELD_INVALID', '昵称不能为空');
-                    if (changes.generation != null && !String(changes.generation).trim()) throw apiErr(400, 'FIELD_INVALID', '届不能为空');
-                    if (changes.realName != null) throw apiErr(400, 'FIELD_FORBIDDEN', '真实姓名不允许通过此接口修改');
+                    const type = body && (body.type === 'create' ? 'create' : body.type === 'update' ? 'update' : null);
+                    if (!type) throw apiErr(400, 'PARAM_MISSING', 'type 必须为 create 或 update');
+                    mockValidateChanges(type, body.changes);
+                    const changes = mockSanitize(body.changes);
 
-                    mockDb.verifyTokens.delete(vt); // 一次性
-                    const member = getMockMember(rec.memberId);
-                    const oldData = {};
-                    Object.keys(changes).forEach(k => { oldData[k] = deepCopy(member[k]); });
+                    let memberId = null, memberName = '', memberUsername = '', oldData = {};
+                    if (type === 'create') {
+                        memberName = changes.name;
+                        memberUsername = changes.username;
+                    } else {
+                        const member = getMockMember(body.memberId);
+                        if (!member) throw apiErr(404, 'MEMBER_NOT_FOUND', '目标条目不存在');
+                        memberId = member.id;
+                        memberName = member.name;
+                        memberUsername = member.username;
+                        Object.keys(changes).forEach(k => { oldData[k] = deepCopy(member[k]); });
+                    }
                     const sub = {
                         id: mockDb.nextSubId++,
-                        // ★ 不记录明文姓名（生产环境哈希不可逆）；
-                        //   仅标记"提交时已通过实名验证"
-                        verifiedByRealName: true,
-                        memberId: rec.memberId,
-                        memberName: member.name,
-                        changes: deepCopy(changes),
-                        oldData,
+                        type, memberId, memberName, memberUsername,
+                        changes, oldData,
                         createdAt: new Date().toISOString(),
-                        status: 'pending'
+                        status: 'pending', reason: null, reviewedAt: null, reviewedBy: null
                     };
                     mockDb.submissions.push(sub);
                     return { submissionId: sub.id };
@@ -2000,18 +2173,32 @@
 
                 /* ---------- 后台接口 ---------- */
 
-                // POST /admin/login
+                // POST /admin/login —— 统一密码登录，自动识别超级管理员 / 审核员
                 if (method === 'POST' && p === '/admin/login') {
                     const pw = body && body.password;
-                    if (pw !== MOCK_ADMIN_PASSWORD) throw apiErr(401, 'PASSWORD_WRONG', '管理密码错误');
+                    let role = null, identity = '';
+                    if (pw && pw === MOCK_ADMIN_PASSWORD) {
+                        role = 'super'; identity = '超级管理员';
+                    } else {
+                        const rv = pw ? mockDb.reviewers.find(r => r.password === pw) : null;
+                        if (rv) { role = 'reviewer'; identity = rv.name; }
+                    }
+                    if (!role) throw apiErr(401, 'PASSWORD_WRONG', '密码错误');
                     const at = 'at_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-                    mockDb.adminTokens.add(at);
-                    return { adminToken: at, expiresAt: new Date(Date.now() + 2 * 3600 * 1000).toISOString() };
+                    mockDb.sessions.set(at, { role, identity, expiresAt: Date.now() + 2 * 3600 * 1000 });
+                    mockAudit(role, identity, 'login', '', '');
+                    return { adminToken: at, role, identity, expiresAt: new Date(Date.now() + 2 * 3600 * 1000).toISOString() };
+                }
+
+                // GET /admin/me
+                if (method === 'GET' && p === '/admin/me') {
+                    const s = mockSession(token);
+                    return { role: s.role, identity: s.identity };
                 }
 
                 // GET /admin/submissions?status=
                 if (method === 'GET' && p === '/admin/submissions') {
-                    requireMockAdmin(token);
+                    mockSession(token);
                     const status = q.get('status') || 'pending';
                     return deepCopy(
                         mockDb.submissions
@@ -2021,138 +2208,163 @@
                 }
 
                 // POST /admin/submissions/:id/approve | reject
-                if (m && method === 'POST') {
-                    requireMockAdmin(token);
-                    const id = Number(m[1]);
-                    const sub = mockDb.submissions.find(s => s.id === id);
+                if (sm && method === 'POST') {
+                    const s = mockSession(token);
+                    const id = Number(sm[1]);
+                    const sub = mockDb.submissions.find(x => x.id === id);
                     if (!sub) throw apiErr(404, 'NOT_FOUND', '该审核记录不存在');
                     if (sub.status !== 'pending') throw apiErr(409, 'ALREADY_REVIEWED', '该记录已被处理过');
 
-                    if (m[2] === 'approve') {
-                        const member = getMockMember(sub.memberId);
-                        if (!member) throw apiErr(404, 'MEMBER_NOT_FOUND', '目标成员已被删除，无法应用修改');
-                        Object.assign(member, deepCopy(sub.changes));
+                    if (sm[2] === 'approve') {
+                        if (sub.type === 'create') {
+                            mockDb.members.push(Object.assign(
+                                { id: mockDb.nextMemberId++, username: '', name: '', crashDate: '', bio: '', avatar: '', tags: [] },
+                                deepCopy(sub.changes)
+                            ));
+                        } else {
+                            const member = getMockMember(sub.memberId);
+                            if (!member) throw apiErr(404, 'MEMBER_NOT_FOUND', '目标条目已被删除，无法应用修改');
+                            Object.assign(member, deepCopy(sub.changes));
+                        }
                         sub.status = 'approved';
                         sub.reviewedAt = new Date().toISOString();
+                        sub.reviewedBy = s.identity;
+                        mockAudit(s.role, s.identity, 'approve',
+                            (sub.type === 'create' ? '新增' : '修改') + ' #' + id + ' ' + (sub.changes.name || sub.memberName), '');
                         return { applied: true };
-                    } else {
-                        const reason = body && body.reason;
-                        if (!reason || !String(reason).trim()) throw apiErr(400, 'REASON_REQUIRED', '请填写驳回理由');
-                        sub.status = 'rejected';
-                        sub.reason = String(reason).trim();
-                        sub.reviewedAt = new Date().toISOString();
-                        return { applied: false };
                     }
+                    const reason = body && body.reason;
+                    if (!reason || !String(reason).trim()) throw apiErr(400, 'REASON_REQUIRED', '请填写驳回理由');
+                    sub.status = 'rejected';
+                    sub.reason = String(reason).trim();
+                    sub.reviewedAt = new Date().toISOString();
+                    sub.reviewedBy = s.identity;
+                    mockAudit(s.role, s.identity, 'reject',
+                        (sub.type === 'create' ? '新增' : '修改') + ' #' + id + ' ' + sub.memberName, sub.reason);
+                    return { applied: false };
                 }
 
-                /* ---------- 后台 · 成员管理 ---------- */
+                /* ---------- 超级管理员 · 审核记录 ---------- */
 
-                // GET /admin/members —— 剔除 realName（只进不出）
-                if (method === 'GET' && p === '/admin/members') {
-                    requireMockAdmin(token);
-                    return mockDb.members.map(publicMember);
+                // GET /admin/audit?limit=
+                if (method === 'GET' && p === '/admin/audit') {
+                    mockSuper(token);
+                    const parsed = parseInt(q.get('limit') || '100', 10);
+                    const limit = Math.min(Math.max(Number.isFinite(parsed) ? parsed : 100, 1), 500);
+                    return deepCopy(mockDb.audits.slice().reverse().slice(0, limit));
                 }
 
-                // POST /admin/members —— 添加（realName 必填 + 查重）
-                if (method === 'POST' && p === '/admin/members') {
-                    requireMockAdmin(token);
-                    const realName = body ? String(body.realName || '').trim() : '';
-                    const name = body ? String(body.name || '').trim() : '';
-                    const gen = body ? String(body.generation || '').trim() : '';
-                    if (!realName) throw apiErr(400, 'FIELD_MISSING', '真实姓名不能为空');
-                    if (realNameTaken(realName, null)) throw apiErr(409, 'REALNAME_EXISTS', '该真实姓名已登记给其他成员');
-                    if (!name) throw apiErr(400, 'FIELD_MISSING', '昵称不能为空');
-                    if (!gen) throw apiErr(400, 'FIELD_MISSING', '届不能为空');
-                    const member = {
-                        id: mockDb.nextMemberId++,
-                        realName, // 仅 mock 内存持有，对外永不返回
-                        name,
-                        generation: gen,
-                        role: (body && body.role) || '',
-                        bio: (body && body.bio) || '',
-                        avatar: (body && body.avatar) || '',
-                        tags: body && Array.isArray(body.tags) ? body.tags : [],
-                        social: body && Array.isArray(body.social) ? body.social : []
-                    };
-                    mockDb.members.push(member);
-                    return { id: member.id };
+                /* ---------- 超级管理员 · 审核员管理 ---------- */
+
+                // GET /admin/reviewers
+                if (method === 'GET' && p === '/admin/reviewers') {
+                    mockSuper(token);
+                    return mockDb.reviewers.map(r => ({ id: r.id, name: r.name, createdAt: r.createdAt }));
                 }
 
-                // POST /admin/members/batch —— 批量导入（与后端 §4.9b 同款校验）
-                if (method === 'POST' && p === '/admin/members/batch') {
-                    requireMockAdmin(token);
-                    const items = body && Array.isArray(body.members) ? body.members : null;
-                    if (!items || items.length === 0) throw apiErr(400, 'FIELD_MISSING', '缺少 members 数组或为空');
-                    if (items.length > 200) throw apiErr(400, 'FIELD_INVALID', '单次批量导入最多 200 条');
-                    const created = [], skipped = [], errors = [], seen = new Set();
-                    for (let i = 0; i < items.length; i++) {
-                        const item = items[i] || {};
-                        const idx = i + 1;
-                        const realName = String(item.realName || '').trim();
-                        const name = String(item.name || '').trim();
-                        const gen = String(item.generation || '').trim();
-                        if (!realName) { errors.push({ index: idx, code: 'FIELD_MISSING', message: '缺少必填字段 realName' }); continue; }
-                        if (!name || !gen) { errors.push({ index: idx, code: 'FIELD_MISSING', message: 'name / generation 必填' }); continue; }
-                        if (realNameTaken(realName, null)) { skipped.push({ index: idx, realName, reason: 'REALNAME_EXISTS' }); continue; }
-                        if (seen.has(realName)) { skipped.push({ index: idx, realName, reason: 'DUPLICATE_IN_BATCH' }); continue; }
-                        seen.add(realName);
-                        const member = {
-                            id: mockDb.nextMemberId++,
-                            realName, // 仅 mock 内存持有，对外永不返回
-                            name,
-                            generation: gen,
-                            role: item.role || '',
-                            bio: item.bio || '',
-                            avatar: item.avatar || '',
-                            tags: Array.isArray(item.tags) ? item.tags : [],
-                            social: Array.isArray(item.social) ? item.social : []
-                        };
-                        mockDb.members.push(member);
-                        created.push({ index: idx, id: member.id, name });
-                    }
-                    return { created, skipped, errors, total: items.length };
+                // POST /admin/reviewers
+                if (method === 'POST' && p === '/admin/reviewers') {
+                    const s = mockSuper(token);
+                    const name = String((body && body.name) || '').trim();
+                    const password = String((body && body.password) || '');
+                    if (!name) throw apiErr(400, 'FIELD_MISSING', '缺少审核员名称');
+                    if (name.length > 32) throw apiErr(400, 'FIELD_INVALID', '审核员名称不能超过 32 个字符');
+                    if (password.length < 6) throw apiErr(400, 'FIELD_INVALID', '密码至少 6 位');
+                    if (mockDb.reviewers.some(r => r.name === name)) throw apiErr(409, 'REVIEWER_EXISTS', '该名称已存在');
+                    const rv = { id: mockDb.nextReviewerId++, name, password, createdAt: new Date().toISOString() };
+                    mockDb.reviewers.push(rv);
+                    mockAudit(s.role, s.identity, 'add_reviewer', name, '');
+                    return { id: rv.id };
                 }
 
-                // PUT /admin/members/:id —— 编辑（realName 非空才覆盖，无清除语义）
-                if (mm && method === 'PUT') {
-                    requireMockAdmin(token);
-                    const member = getMockMember(mm[1]);
-                    if (!member) throw apiErr(404, 'MEMBER_NOT_FOUND', '该成员不存在');
-                    if (body.realName != null && String(body.realName).trim()) {
-                        const rn = String(body.realName).trim();
-                        if (realNameTaken(rn, member.id)) throw apiErr(409, 'REALNAME_EXISTS', '该真实姓名已登记给其他成员');
-                        member.realName = rn;
+                // PUT /admin/reviewers/:id
+                if (rm && method === 'PUT') {
+                    const s = mockSuper(token);
+                    const rv = mockDb.reviewers.find(r => r.id === Number(rm[1]));
+                    if (!rv) throw apiErr(404, 'REVIEWER_NOT_FOUND', '审核员不存在');
+                    if (body && body.name != null) {
+                        const name = String(body.name).trim();
+                        if (!name) throw apiErr(400, 'FIELD_INVALID', '审核员名称不能为空');
+                        if (name.length > 32) throw apiErr(400, 'FIELD_INVALID', '审核员名称不能超过 32 个字符');
+                        if (mockDb.reviewers.some(r => r.name === name && r.id !== rv.id)) throw apiErr(409, 'REVIEWER_EXISTS', '该名称已存在');
+                        rv.name = name;
                     }
-                    if (body.name != null) {
-                        if (!String(body.name).trim()) throw apiErr(400, 'FIELD_INVALID', '昵称不能为空');
-                        member.name = String(body.name).trim();
+                    if (body && body.password != null && String(body.password) !== '') {
+                        const password = String(body.password);
+                        if (password.length < 6) throw apiErr(400, 'FIELD_INVALID', '密码至少 6 位');
+                        rv.password = password;
                     }
-                    if (body.generation != null) {
-                        if (!String(body.generation).trim()) throw apiErr(400, 'FIELD_INVALID', '届不能为空');
-                        member.generation = String(body.generation).trim();
-                    }
-                    if (body.role != null) member.role = body.role;
-                    if (body.bio != null) member.bio = body.bio;
-                    if (body.avatar != null) member.avatar = body.avatar;
-                    if (body.tags !== undefined) member.tags = Array.isArray(body.tags) ? body.tags : [];
-                    if (body.social !== undefined) member.social = Array.isArray(body.social) ? body.social : [];
+                    mockAudit(s.role, s.identity, 'update_reviewer', rv.name, '已更新');
                     return { updated: true };
                 }
 
-                // DELETE /admin/members/:id —— 删除（realName 随之销毁）
+                // DELETE /admin/reviewers/:id
+                if (rm && method === 'DELETE') {
+                    const s = mockSuper(token);
+                    const idx = mockDb.reviewers.findIndex(r => r.id === Number(rm[1]));
+                    if (idx === -1) throw apiErr(404, 'REVIEWER_NOT_FOUND', '审核员不存在');
+                    const name = mockDb.reviewers[idx].name;
+                    mockDb.reviewers.splice(idx, 1);
+                    mockDb.sessions.forEach((v, k) => {
+                        if (v.role === 'reviewer' && v.identity === name) mockDb.sessions.delete(k);
+                    });
+                    mockAudit(s.role, s.identity, 'delete_reviewer', name, '');
+                    return { deleted: true };
+                }
+
+                /* ---------- 超级管理员 · 条目直接管理（立即生效） ---------- */
+
+                // GET /admin/members
+                if (method === 'GET' && p === '/admin/members') {
+                    mockSuper(token);
+                    return mockDb.members
+                        .slice()
+                        .sort((a, b) => String(b.crashDate).localeCompare(String(a.crashDate)) || b.id - a.id)
+                        .map(publicMember);
+                }
+
+                // POST /admin/members
+                if (method === 'POST' && p === '/admin/members') {
+                    const s = mockSuper(token);
+                    mockValidateChanges('create', body);
+                    const obj = mockSanitize(body);
+                    const member = Object.assign(
+                        { id: mockDb.nextMemberId++, username: '', name: '', crashDate: '', bio: '', avatar: '', tags: [] },
+                        obj
+                    );
+                    mockDb.members.push(member);
+                    mockAudit(s.role, s.identity, 'create_member', obj.name, obj.username);
+                    return { id: member.id };
+                }
+
+                // PUT /admin/members/:id
+                if (mm && method === 'PUT') {
+                    const s = mockSuper(token);
+                    const member = getMockMember(mm[1]);
+                    if (!member) throw apiErr(404, 'MEMBER_NOT_FOUND', '该条目不存在');
+                    mockValidateChanges('update', body);
+                    Object.assign(member, mockSanitize(body));
+                    mockAudit(s.role, s.identity, 'update_member', member.name, '');
+                    return { updated: true };
+                }
+
+                // DELETE /admin/members/:id
                 if (mm && method === 'DELETE') {
-                    requireMockAdmin(token);
+                    const s = mockSuper(token);
                     const idx = mockDb.members.findIndex(x => x.id === Number(mm[1]));
-                    if (idx === -1) throw apiErr(404, 'MEMBER_NOT_FOUND', '该成员不存在');
+                    if (idx === -1) throw apiErr(404, 'MEMBER_NOT_FOUND', '该条目不存在');
+                    const name = mockDb.members[idx].name;
                     const id = mockDb.members[idx].id;
                     mockDb.members.splice(idx, 1);
-                    mockDb.submissions.forEach(s => {
-                        if (s.memberId === id && s.status === 'pending') {
-                            s.status = 'rejected';
-                            s.reason = '目标成员已被删除，提交自动作废';
-                            s.reviewedAt = new Date().toISOString();
+                    mockDb.submissions.forEach(sub => {
+                        if (sub.memberId === id && sub.status === 'pending') {
+                            sub.status = 'rejected';
+                            sub.reason = '目标条目已被删除，提交自动作废';
+                            sub.reviewedAt = new Date().toISOString();
+                            sub.reviewedBy = s.identity;
                         }
                     });
+                    mockAudit(s.role, s.identity, 'delete_member', name, '');
                     return { deleted: true };
                 }
 
@@ -2221,15 +2433,20 @@
             let animSeq = 0;
 
             let editModalOpen = false;
-            let editCtx = { targetMemberId: null, memberId: null, verifyToken: null, original: null };
+            let editCtx = { memberId: null, isCreate: true, original: null, turnstileToken: '', turnstileWidgetId: null };
 
             let memberModalOpen = false;
             let memberModalMode = 'add';
             let memberModalEditId = null;
 
+            let appConfig = { turnstileEnabled: false, turnstileSiteKey: '' };
+
             let adminToken = sessionStorage.getItem('adminToken') || null;
+            let adminRole = sessionStorage.getItem('adminRole') || null;
+            let adminIdentity = sessionStorage.getItem('adminIdentity') || '';
             let adminTab = 'pending';
             let adminMembersCache = [];
+            let adminReviewersCache = [];
             let adminListReqSeq = 0;
             let mainNeedsReload = false;
 
@@ -2240,13 +2457,14 @@
             const filterBarEl = $('filterBar');
             const countBadge = $('countBadge');
             const resetBtn = $('resetFilterBtn');
-            const editOpenBtn = $('editOpenBtn');
+            const addOpenBtn = $('addOpenBtn');
             const overlay = $('overlay');
             const expandCard = $('expandCard');
             const expandContent = $('expandContent');
             const expandAvatar = $('expandAvatar');
             const expandName = $('expandName');
-            const expandRole = $('expandRole');
+            const expandUsername = $('expandUsername');
+            const expandDate = $('expandDate');
             const expandBio = $('expandBio');
             const expandTags = $('expandTags');
             const expandSocial = $('expandSocial');
@@ -2254,24 +2472,19 @@
             const closeBtn = $('closeOverlayBtn');
 
             const editModal = $('editModal');
+            const editModalTitle = $('editModalTitle');
+            const editModalTip = $('editModalTip');
             const editModalClose = $('editModalClose');
-            const editStepVerify = $('editStepVerify');
-            const editStepForm = $('editStepForm');
-            const verifyNameInput = $('verifyNameInput');
-            const verifySubmitBtn = $('verifySubmitBtn');
-            const verifyError = $('verifyError');
-            const editTargetName = $('editTargetName');
+            const efUsername = $('efUsername');
             const efName = $('efName');
-            const efGeneration = $('efGeneration');
-            const efRole = $('efRole');
+            const efCrashDate = $('efCrashDate');
             const efAvatar = $('efAvatar');
             const efBio = $('efBio');
             const efTags = $('efTags');
-            const efSocialRows = $('efSocialRows');
-            const efAddSocial = $('efAddSocial');
-            const editBackBtn = $('editBackBtn');
-            const editSubmitBtn = $('editSubmitBtn');
+            const efTurnstileEl = $('efTurnstile');
             const editSubmitError = $('editSubmitError');
+            const editCancelBtn = $('editCancelBtn');
+            const editSubmitBtn = $('editSubmitBtn');
 
             const memberModal = $('memberModal');
             const memberModalTitle = $('memberModalTitle');
@@ -2279,26 +2492,13 @@
             const memberModalClose = $('memberModalClose');
             const memberCancelBtn = $('memberCancelBtn');
             const memberSaveBtn = $('memberSaveBtn');
-            const mfRealName = $('mfRealName');
-            const mfRealNameHint = $('mfRealNameHint');
+            const mfUsername = $('mfUsername');
             const mfName = $('mfName');
-            const mfGeneration = $('mfGeneration');
-            const mfRole = $('mfRole');
+            const mfCrashDate = $('mfCrashDate');
             const mfAvatar = $('mfAvatar');
             const mfBio = $('mfBio');
             const mfTags = $('mfTags');
-            const mfSocialRows = $('mfSocialRows');
-            const mfAddSocial = $('mfAddSocial');
             const memberFormError = $('memberFormError');
-
-            const batchModal = $('batchModal');
-            const batchModalClose = $('batchModalClose');
-            const batchInput = $('batchInput');
-            const batchError = $('batchError');
-            const batchResult = $('batchResult');
-            const batchCancelBtn = $('batchCancelBtn');
-            const batchImportBtn = $('batchImportBtn');
-            let batchModalOpen = false;
 
             const adminLoginView = $('adminLoginView');
             const adminPanelView = $('adminPanelView');
@@ -2308,6 +2508,7 @@
             const adminTabsEl = $('adminTabs');
             const adminListEl = $('adminList');
             const adminLogoutBtn = $('adminLogoutBtn');
+            const adminWho = $('adminWho');
 
             const toastEl = $('toastEl');
 
@@ -2396,14 +2597,21 @@
                 members.forEach(m => (m.tags || []).forEach(t => tagSet.add(t)));
                 return Array.from(tagSet).sort();
             }
-            function groupByGeneration(list) {
+            function groupByMonth(list) {
                 const groups = {};
                 list.forEach(m => {
-                    const gen = m.generation || '未知';
-                    if (!groups[gen]) groups[gen] = [];
-                    groups[gen].push(m);
+                    const key = /^\d{4}-\d{2}/.test(String(m.crashDate || ''))
+                        ? String(m.crashDate).slice(0, 7)
+                        : '未知日期';
+                    if (!groups[key]) groups[key] = [];
+                    groups[key].push(m);
                 });
                 return groups;
+            }
+            function monthLabel(key) {
+                if (key === '未知日期') return key;
+                const parts = key.split('-');
+                return parts[0] + ' 年 ' + parseInt(parts[1], 10) + ' 月';
             }
             function getMemberById(id) {
                 return members.find(m => m.id === id);
@@ -2456,24 +2664,24 @@
 
             function renderTimeline() {
                 if (!members.length) {
-                    countBadge.textContent = '0 位成员';
-                    paintTimeline('<div class="empty-state"><p>暂无成员数据</p></div>');
+                    countBadge.textContent = '0 条记录';
+                    paintTimeline('<div class="empty-state"><p>暂无翻车记录</p></div>');
                     return;
                 }
                 let filtered = members;
                 if (activeFilter !== '全部') {
                     filtered = members.filter(m => (m.tags || []).includes(activeFilter));
                 }
-                countBadge.textContent = filtered.length + ' 位成员';
-                const groups = groupByGeneration(filtered);
-                const generations = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-                if (generations.length === 0) {
-                    paintTimeline('<div class="empty-state"><p>✧ 没有成员匹配 “' + esc(activeFilter) + '” 标签</p></div>');
+                countBadge.textContent = filtered.length + ' 条记录';
+                const groups = groupByMonth(filtered);
+                const months = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+                if (months.length === 0) {
+                    paintTimeline('<div class="empty-state"><p>✧ 没有记录匹配 “' + esc(activeFilter) + '” 标签</p></div>');
                     return;
                 }
                 let html = '';
-                generations.forEach(gen => {
-                    const list = groups[gen];
+                months.forEach(month => {
+                    const list = groups[month];
                     let cardsHtml = '';
                     list.forEach(m => {
                         const avatarContent = m.avatar
@@ -2486,10 +2694,10 @@
                             '</div>';
                     });
                     html +=
-                        '<div class="timeline-item" data-generation="' + esc(gen) + '">' +
+                        '<div class="timeline-item" data-month="' + esc(month) + '">' +
                         '<div class="generation-header">' +
-                        '<span class="generation-title">' + esc(gen) + ' 届</span>' +
-                        '<span class="generation-count">' + list.length + ' 人</span>' +
+                        '<span class="generation-title">' + esc(monthLabel(month)) + '</span>' +
+                        '<span class="generation-count">' + list.length + ' 条</span>' +
                         '</div>' +
                         '<div class="card-grid">' + cardsHtml + '</div>' +
                         '</div>';
@@ -2520,8 +2728,9 @@
                     : esc(String(member.name || '?').charAt(0));
                 expandAvatar.innerHTML = avatarContent;
                 expandName.textContent = member.name;
-                expandRole.textContent = member.role || '成员';
-                expandBio.textContent = member.bio || '这位成员很神秘，什么都没有留下。';
+                expandUsername.textContent = member.username ? '@' + member.username : '';
+                expandDate.textContent = member.crashDate ? '翻车于 ' + member.crashDate : '翻车日期未知';
+                expandBio.textContent = member.bio || '这位 X 友的翻车细节暂未补充。';
 
                 expandTags.innerHTML = '';
                 if (member.tags && member.tags.length) {
@@ -2536,21 +2745,18 @@
                 }
 
                 expandSocial.innerHTML = '';
-                const socials = Array.isArray(member.social) ? member.social.filter(s => s && (s.name || s.url)) : [];
-                if (socials.length) {
-                    socials.forEach(s => {
-                        const a = document.createElement('a');
-                        a.className = 'social-link';
-                        a.textContent = s.name || s.url;
-                        a.href = normalizeUrl(s.url);
-                        a.target = '_blank';
-                        a.rel = 'noopener noreferrer';
-                        expandSocial.appendChild(a);
-                    });
+                if (member.username) {
+                    const a = document.createElement('a');
+                    a.className = 'social-link';
+                    a.textContent = '在 X 查看 @' + member.username;
+                    a.href = 'https://x.com/' + encodeURIComponent(member.username);
+                    a.target = '_blank';
+                    a.rel = 'noopener noreferrer';
+                    expandSocial.appendChild(a);
                 } else {
                     const span = document.createElement('span');
                     span.className = 'social-empty';
-                    span.textContent = '暂无社交链接';
+                    span.textContent = '未填写 X 用户名';
                     expandSocial.appendChild(span);
                 }
             }
@@ -2727,44 +2933,91 @@
             }
 
             /* ============================================================
-               共享：社交链接动态行
+               人机验证（Cloudflare Turnstile）
                ============================================================ */
-            function addSocialRowTo(container, name, url) {
-                const row = document.createElement('div');
-                row.className = 'social-row';
-                const nameInput = document.createElement('input');
-                nameInput.type = 'text';
-                nameInput.placeholder = '名称（如 哔哩哔哩）';
-                nameInput.value = name;
-                const urlInput = document.createElement('input');
-                urlInput.type = 'text';
-                urlInput.placeholder = 'https://…';
-                urlInput.value = url;
-                const del = document.createElement('button');
-                del.type = 'button';
-                del.className = 'sr-del';
-                del.textContent = '✕';
-                del.addEventListener('click', () => row.remove());
-                row.appendChild(nameInput);
-                row.appendChild(urlInput);
-                row.appendChild(del);
-                container.appendChild(row);
+            function ensureTurnstileScript() {
+                return new Promise((resolve, reject) => {
+                    if (window.turnstile && window.turnstile.render) return resolve();
+                    const existing = document.getElementById('cf-turnstile-script');
+                    if (existing) {
+                        existing.addEventListener('load', () => resolve());
+                        existing.addEventListener('error', () => reject(new Error('人机验证脚本加载失败')));
+                        return;
+                    }
+                    const s = document.createElement('script');
+                    s.id = 'cf-turnstile-script';
+                    s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+                    s.async = true;
+                    s.defer = true;
+                    s.onload = () => resolve();
+                    s.onerror = () => reject(new Error('人机验证脚本加载失败'));
+                    document.head.appendChild(s);
+                });
+            }
+            async function mountTurnstile() {
+                editCtx.turnstileToken = '';
+                editCtx.turnstileWidgetId = null;
+                efTurnstileEl.innerHTML = '';
+                if (!appConfig.turnstileEnabled || !appConfig.turnstileSiteKey) return;
+                try {
+                    await ensureTurnstileScript();
+                    if (!editModalOpen) return;
+                    editCtx.turnstileWidgetId = window.turnstile.render(efTurnstileEl, {
+                        sitekey: appConfig.turnstileSiteKey,
+                        theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
+                        callback: t => { editCtx.turnstileToken = t; },
+                        'expired-callback': () => { editCtx.turnstileToken = ''; },
+                        'error-callback': () => { editCtx.turnstileToken = ''; }
+                    });
+                } catch (e) {
+                    editSubmitError.textContent = e.message;
+                }
+            }
+            function resetTurnstile() {
+                editCtx.turnstileToken = '';
+                if (window.turnstile && editCtx.turnstileWidgetId != null) {
+                    try { window.turnstile.reset(editCtx.turnstileWidgetId); } catch (e) { /* 忽略 */ }
+                }
             }
 
             /* ============================================================
-               前台 · 编辑资料模态（走审核）
+               前台 · 提交建议模态（新增 / 修改，走审核）
                ============================================================ */
+            function splitTags(s) {
+                return String(s || '').split(/[,，、\s]+/).map(t => t.trim()).filter(Boolean).slice(0, 8);
+            }
+
             function openEditModal(targetMemberId) {
-                editCtx = { targetMemberId: targetMemberId || null, memberId: null, verifyToken: null, original: null };
-                editStepVerify.hidden = false;
-                editStepForm.hidden = true;
-                verifyError.textContent = '';
-                verifySubmitBtn.disabled = false;
-                verifySubmitBtn.textContent = '验 证';
+                const member = targetMemberId != null ? getMemberById(Number(targetMemberId)) : null;
+                if (targetMemberId != null && !member) { toast('条目不存在', 'error'); return; }
+                editCtx = {
+                    memberId: member ? member.id : null,
+                    isCreate: !member,
+                    original: member,
+                    turnstileToken: '',
+                    turnstileWidgetId: null
+                };
+
+                editModalTitle.textContent = member ? '提交修改建议' : '添加条目';
+                editModalTip.textContent = member
+                    ? '正在为「' + member.name + '」提交修改建议，需管理员审核后生效。'
+                    : '填写后提交，需管理员审核后才会出现在列表中。';
+
+                efUsername.value = member ? (member.username || '') : '';
+                efName.value = member ? (member.name || '') : '';
+                efCrashDate.value = member ? (member.crashDate || '') : '';
+                efAvatar.value = member ? (member.avatar || '') : '';
+                efBio.value = member ? (member.bio || '') : '';
+                efTags.value = member ? (member.tags || []).join(', ') : '';
+                editSubmitError.textContent = '';
+                editSubmitBtn.disabled = false;
+                editSubmitBtn.textContent = '提交审核';
+
                 editModal.classList.add('active');
                 lockScroll();
                 editModalOpen = true;
-                setTimeout(() => verifyNameInput.focus(), 120);
+                mountTurnstile();
+                setTimeout(() => efUsername.focus(), 120);
             }
 
             function closeEditModal() {
@@ -2772,145 +3025,113 @@
                 editModal.classList.remove('active');
                 unlockScroll();
                 editModalOpen = false;
+                editCtx.turnstileToken = '';
             }
 
-            async function handleVerifySubmit() {
-                const realName = verifyNameInput.value.trim();
-                verifyError.textContent = '';
-                if (!realName) { verifyError.textContent = '请输入真实姓名'; return; }
-
-                verifySubmitBtn.disabled = true;
-                verifySubmitBtn.textContent = '验证中…';
-                try {
-                    const data = await apiFetch('/verify-name', {
-                        method: 'POST',
-                        body: { realName, memberId: editCtx.targetMemberId || undefined }
-                    });
-                    editCtx.memberId = data.memberId;
-                    editCtx.verifyToken = data.verifyToken;
-                    editCtx.original = data.member;
-                    editTargetName.textContent = data.member.name;
-                    fillEditForm(data.member);
-                    editStepVerify.hidden = true;
-                    editStepForm.hidden = false;
-                } catch (err) {
-                    verifyError.textContent = err.message;
-                } finally {
-                    verifySubmitBtn.disabled = false;
-                    verifySubmitBtn.textContent = '验 证';
-                }
-            }
-
-            function fillEditForm(member) {
-                efName.value = member.name || '';
-                efGeneration.value = member.generation || '';
-                efRole.value = member.role || '';
-                efAvatar.value = member.avatar || '';
-                efBio.value = member.bio || '';
-                efTags.value = (member.tags || []).join(', ');
-                efSocialRows.innerHTML = '';
-                const socials = Array.isArray(member.social) ? member.social : [];
-                socials.forEach(s => addSocialRowTo(efSocialRows, s.name || '', s.url || ''));
-                editSubmitError.textContent = '';
-            }
-
-            function collectFormValues() {
-                const social = [];
-                efSocialRows.querySelectorAll('.social-row').forEach(row => {
-                    const inputs = row.querySelectorAll('input');
-                    const n = inputs[0].value.trim();
-                    const u = inputs[1].value.trim();
-                    if (n || u) social.push({ name: n, url: u });
-                });
-                const tags = efTags.value.split(/[,，、\s]+/).map(t => t.trim()).filter(Boolean);
+            function collectEditValues() {
                 return {
+                    username: efUsername.value.trim(),
                     name: efName.value.trim(),
-                    generation: efGeneration.value.trim(),
-                    role: efRole.value.trim(),
-                    bio: efBio.value.trim(),
+                    crashDate: efCrashDate.value.trim(),
                     avatar: efAvatar.value.trim(),
-                    tags,
-                    social
+                    bio: efBio.value,
+                    tags: splitTags(efTags.value)
                 };
             }
 
-            function buildChanges() {
-                const vals = collectFormValues();
+            function buildEditChanges() {
+                const vals = collectEditValues();
+                if (editCtx.isCreate) {
+                    return {
+                        username: vals.username,
+                        name: vals.name,
+                        crashDate: vals.crashDate,
+                        bio: vals.bio,
+                        avatar: vals.avatar,
+                        tags: vals.tags
+                    };
+                }
                 const o = editCtx.original || {};
                 const changes = {};
-                ['name', 'generation', 'role', 'bio', 'avatar'].forEach(k => {
-                    if (vals[k] !== (o[k] || '')) changes[k] = vals[k];
-                });
+                if (vals.username !== (o.username || '')) changes.username = vals.username;
+                if (vals.name !== (o.name || '')) changes.name = vals.name;
+                if (vals.crashDate !== (o.crashDate || '')) changes.crashDate = vals.crashDate;
+                if (vals.bio.trim() !== (o.bio || '')) changes.bio = vals.bio;
+                if (vals.avatar !== (o.avatar || '')) changes.avatar = vals.avatar;
                 if (vals.tags.join('\u0001') !== (o.tags || []).join('\u0001')) changes.tags = vals.tags;
-                const normSocial = arr => (arr || []).map(s => s.name + '\u0001' + s.url).join('\u0002');
-                if (normSocial(vals.social) !== normSocial(o.social)) changes.social = vals.social;
                 return changes;
             }
 
+            function validateEditInput() {
+                if (!efUsername.value.trim()) return '请填写 X 用户名';
+                if (!efName.value.trim()) return '请填写昵称';
+                if (!efCrashDate.value.trim()) return '请选择翻车日期';
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(efCrashDate.value.trim())) return '翻车日期格式应为 YYYY-MM-DD';
+                return '';
+            }
+
             async function handleEditSubmit() {
-                const changes = buildChanges();
                 editSubmitError.textContent = '';
+                const msg = validateEditInput();
+                if (msg) { editSubmitError.textContent = msg; return; }
+
+                const changes = buildEditChanges();
                 if (!Object.keys(changes).length) {
                     editSubmitError.textContent = '没有修改任何内容';
                     return;
                 }
+                if (appConfig.turnstileEnabled && !editCtx.turnstileToken) {
+                    editSubmitError.textContent = '请先完成人机验证';
+                    return;
+                }
+
                 editSubmitBtn.disabled = true;
                 editSubmitBtn.textContent = '提交中…';
                 try {
                     await apiFetch('/submissions', {
                         method: 'POST',
-                        body: { verifyToken: editCtx.verifyToken, changes }
+                        body: {
+                            type: editCtx.isCreate ? 'create' : 'update',
+                            memberId: editCtx.isCreate ? undefined : editCtx.memberId,
+                            changes,
+                            turnstileToken: editCtx.turnstileToken || ''
+                        }
                     });
                     closeEditModal();
                     toast('已提交审核，请等待管理员处理', 'success');
                 } catch (err) {
                     editSubmitError.textContent = err.message;
-                    if (err.code === 'TOKEN_INVALID' || err.code === 'TOKEN_EXPIRED') {
-                        editStepForm.hidden = true;
-                        editStepVerify.hidden = false;
-                        verifyError.textContent = err.message;
-                    }
-                } finally {
+                    if (err.code === 'TURNSTILE_FAILED') resetTurnstile();
                     editSubmitBtn.disabled = false;
                     editSubmitBtn.textContent = '提交审核';
                 }
             }
 
             /* ============================================================
-               后台 · 成员管理模态（立即生效）
+               后台 · 条目管理模态（超级管理员 · 立即生效）
                ============================================================ */
             function openMemberModal(mode, member) {
                 memberModalMode = mode;
                 memberModalEditId = member ? member.id : null;
-                memberModalTitle.textContent = mode === 'add' ? '添加成员' : '编辑成员';
+                memberModalTitle.textContent = mode === 'add' ? '添加条目' : '编辑条目';
 
-                // ★ 只进不出字段：编辑时无法回显，永远从空开始
-                mfRealName.value = '';
                 if (mode === 'add') {
-                    memberModalTip.innerHTML = '添加后<b>立即生效</b>（管理员操作无需审核）。真实姓名仅存储哈希值，用于成员自助修改资料时的身份验证。';
-                    mfRealName.placeholder = '如：张三';
-                    mfRealNameHint.textContent = '只进不出：服务端只存哈希，任何接口（含后台）都不会返回该值';
+                    memberModalTip.innerHTML = '添加后<b>立即生效</b>（超级管理员操作无需审核）。';
                 } else {
                     memberModalTip.innerHTML = '正在编辑 <b>' + esc(member.name) + '</b>（#' + member.id + '），保存后<b>立即生效</b>。';
-                    mfRealName.placeholder = '留空表示不修改';
-                    mfRealNameHint.textContent = '已登记的真实姓名无法查看；留空保持不变，填写则覆盖';
                 }
 
+                mfUsername.value = member ? (member.username || '') : '';
                 mfName.value = member ? (member.name || '') : '';
-                mfGeneration.value = member ? (member.generation || '') : '';
-                mfRole.value = member ? (member.role || '') : '';
+                mfCrashDate.value = member ? (member.crashDate || '') : '';
                 mfAvatar.value = member ? (member.avatar || '') : '';
                 mfBio.value = member ? (member.bio || '') : '';
                 mfTags.value = member ? (member.tags || []).join(', ') : '';
-                mfSocialRows.innerHTML = '';
-                if (member && Array.isArray(member.social)) {
-                    member.social.forEach(s => addSocialRowTo(mfSocialRows, s.name || '', s.url || ''));
-                }
                 memberFormError.textContent = '';
                 memberModal.classList.add('active');
                 lockScroll();
                 memberModalOpen = true;
-                setTimeout(() => mfRealName.focus(), 120);
+                setTimeout(() => mfUsername.focus(), 120);
             }
 
             function closeMemberModal() {
@@ -2920,154 +3141,38 @@
                 memberModalOpen = false;
             }
 
-            /* 后台 · 批量导入成员模态 */
-            function openBatchModal() {
-                if (batchModalOpen) return;
-                batchInput.value = '';
-                batchError.textContent = '';
-                batchResult.hidden = true;
-                batchResult.innerHTML = '';
-                batchModal.classList.add('active');
-                lockScroll();
-                batchModalOpen = true;
-                setTimeout(() => batchInput.focus(), 120);
-            }
+            /* 批量导入功能已移除：条目可直接在「条目管理」中逐条增删改。 */
 
-            function closeBatchModal() {
-                if (!batchModalOpen) return;
-                batchModal.classList.remove('active');
-                unlockScroll();
-                batchModalOpen = false;
-            }
-
-            /* 解析批量输入：每行一位成员，逗号分隔 7 个字段，可选表头行 */
-            function parseBatchInput(text) {
-                const lines = String(text || '')
-                    .split(/\r?\n/)
-                    .map(l => l.trim())
-                    .filter(Boolean);
-                const members = [];
-                const errors = [];
-                let skippedHeader = false;
-                lines.forEach((line, i) => {
-                    const idx = i + 1;
-                    if (!skippedHeader && /(^真实姓名)|(^姓名)|(^realname)/i.test(line)) {
-                        skippedHeader = true;
-                        return;
-                    }
-                    const parts = line.split(',').map(s => s.trim());
-                    const realName = parts[0] || '';
-                    const name = parts[1] || '';
-                    const generation = parts[2] || '';
-                    const role = parts[3] || '';
-                    const bio = parts[4] || '';
-                    const avatar = parts[5] || '';
-                    const tags = parts[6]
-                        ? parts[6].split(/[|｜]/).map(t => t.trim()).filter(Boolean)
-                        : [];
-                    if (!realName || !name || !generation) {
-                        errors.push('第 ' + idx + ' 行字段不足（需 真实姓名,昵称,届别…）');
-                        return;
-                    }
-                    members.push({ realName, name, generation, role, bio, avatar, tags, social: [] });
-                });
-                return { members, errors };
-            }
-
-            async function handleBatchImport() {
-                batchError.textContent = '';
-                batchResult.hidden = true;
-                const { members, errors } = parseBatchInput(batchInput.value);
-                if (errors.length) {
-                    batchError.textContent = '解析失败：' + errors.join('；');
-                    return;
-                }
-                if (!members.length) {
-                    batchError.textContent = '没有可导入的内容';
-                    return;
-                }
-                batchImportBtn.disabled = true;
-                try {
-                    const data = await apiFetch('/admin/members/batch', {
-                        method: 'POST',
-                        body: { members },
-                        token: adminToken
-                    });
-                    const created = (data.created || []).length;
-                    const skipped = (data.skipped || []).length;
-                    const errs = (data.errors || []).length;
-                    let html = '<div class="batch-summary">成功导入 <b>' + created +
-                        '</b> 位，跳过 <b>' + skipped + '</b> 位，错误 <b>' + errs +
-                        '</b> 位（共 ' + (data.total || members.length) + ' 行）</div>';
-                    const details = [];
-                    (data.skipped || []).forEach(s =>
-                        details.push('跳过 #' + s.index + ' ' + esc(s.realName) + '：' + s.reason));
-                    (data.errors || []).forEach(e =>
-                        details.push('错误 #' + e.index + '：' + esc(e.message)));
-                    if (details.length) {
-                        html += '<ul class="batch-detail">' +
-                            details.map(d => '<li>' + esc(d) + '</li>').join('') + '</ul>';
-                    }
-                    batchResult.innerHTML = html;
-                    batchResult.hidden = false;
-                    if (created > 0) {
-                        mainNeedsReload = true;
-                        loadAdminMembers();
-                    }
-                    if (skipped === 0 && errs === 0) {
-                        toast('批量导入成功：' + created + ' 位成员', 'success');
-                        closeBatchModal();
-                    }
-                } catch (err) {
-                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
-                    batchError.textContent = err.message;
-                } finally {
-                    batchImportBtn.disabled = false;
-                }
-            }
 
             function collectAdminFormValues() {
-                const social = [];
-                mfSocialRows.querySelectorAll('.social-row').forEach(row => {
-                    const inputs = row.querySelectorAll('input');
-                    const n = inputs[0].value.trim();
-                    const u = inputs[1].value.trim();
-                    if (n || u) social.push({ name: n, url: u });
-                });
-                const tags = mfTags.value.split(/[,，、\s]+/).map(t => t.trim()).filter(Boolean);
                 return {
-                    realName: mfRealName.value.trim(),
+                    username: mfUsername.value.trim(),
                     name: mfName.value.trim(),
-                    generation: mfGeneration.value.trim(),
-                    role: mfRole.value.trim(),
+                    crashDate: mfCrashDate.value.trim(),
                     avatar: mfAvatar.value.trim(),
-                    bio: mfBio.value.trim(),
-                    tags,
-                    social
+                    bio: mfBio.value,
+                    tags: splitTags(mfTags.value)
                 };
             }
 
             async function handleMemberSave() {
                 const vals = collectAdminFormValues();
                 memberFormError.textContent = '';
-                if (memberModalMode === 'add' && !vals.realName) {
-                    memberFormError.textContent = '真实姓名不能为空';
+                if (!vals.username) { memberFormError.textContent = 'X 用户名不能为空'; return; }
+                if (!vals.name) { memberFormError.textContent = '昵称不能为空'; return; }
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(vals.crashDate)) {
+                    memberFormError.textContent = '请选择翻车日期（YYYY-MM-DD）';
                     return;
                 }
-                if (!vals.name) { memberFormError.textContent = '昵称不能为空'; return; }
-                if (!vals.generation) { memberFormError.textContent = '届不能为空'; return; }
 
                 memberSaveBtn.disabled = true;
                 memberSaveBtn.textContent = '保存中…';
                 try {
                     if (memberModalMode === 'add') {
                         await apiFetch('/admin/members', { method: 'POST', body: vals, token: adminToken });
-                        toast('成员已添加', 'success');
+                        toast('条目已添加', 'success');
                     } else {
-                        // ★ 编辑时留空 = 不修改 realName（不发送该字段）
-                        const body = { ...vals };
-                        if (!body.realName) delete body.realName;
-                        await apiFetch('/admin/members/' + memberModalEditId, { method: 'PUT', body, token: adminToken });
+                        await apiFetch('/admin/members/' + memberModalEditId, { method: 'PUT', body: vals, token: adminToken });
                         toast('修改已保存', 'success');
                     }
                     closeMemberModal();
@@ -3087,20 +3192,38 @@
             }
 
             /* ============================================================
-               后台 · 审核 / 成员管理渲染
+               后台 · 渲染
                ============================================================ */
             const FIELD_LABELS = {
-                name: '昵称', generation: '届', role: '职位',
-                bio: '简介', tags: '标签', social: '社交链接', avatar: '头像'
+                username: '用户名', name: '昵称', crashDate: '翻车日期',
+                bio: '翻车详情', avatar: '头像', tags: '标签'
             };
             function formatVal(k, v) {
                 if (v == null || v === '') return '（空）';
-                if (k === 'tags') return (v || []).join('、');
-                if (k === 'social') return (v || []).map(s => s.name + ': ' + s.url).join('\n');
+                if (k === 'tags') return (v || []).join('、') || '（空）';
                 return String(v);
             }
             function isAuthErr(err) {
                 return err && (err.status === 401 || /TOKEN|PASSWORD/i.test(err.code || ''));
+            }
+            function roleLabel(role) {
+                return role === 'super' ? '超级管理员' : '审核员';
+            }
+            function applyAdminRoleUI() {
+                const isSuper = adminRole === 'super';
+                adminTabsEl.querySelectorAll('[data-super]').forEach(btn => { btn.hidden = !isSuper; });
+                const cur = adminTabsEl.querySelector('.filter-btn.active');
+                if (!isSuper && cur && cur.dataset.super) {
+                    adminTab = 'pending';
+                    adminTabsEl.querySelectorAll('.filter-btn').forEach(b =>
+                        b.classList.toggle('active', b.dataset.tab === 'pending'));
+                }
+                if (adminWho) {
+                    const label = roleLabel(adminRole);
+                    const who = (adminIdentity && adminIdentity !== label) ? adminIdentity + ' · ' + label : label;
+                    adminWho.hidden = !adminToken;
+                    adminWho.innerHTML = adminToken ? '<b>' + esc(who) + '</b>' : '';
+                }
             }
 
             function renderAdmin() {
@@ -3110,6 +3233,7 @@
                 } else if (logged && adminPanelView.hidden) {
                     hideView(adminLoginView, function () { showView(adminPanelView); });
                 }
+                applyAdminRoleUI();
                 if (logged) loadAdminList();
             }
 
@@ -3122,8 +3246,15 @@
                 try {
                     const data = await apiFetch('/admin/login', { method: 'POST', body: { password: pw } });
                     adminToken = data.adminToken;
+                    adminRole = data.role;
+                    adminIdentity = data.identity;
                     sessionStorage.setItem('adminToken', adminToken);
+                    sessionStorage.setItem('adminRole', adminRole);
+                    sessionStorage.setItem('adminIdentity', adminIdentity);
                     adminPasswordInput.value = '';
+                    adminTab = 'pending';
+                    adminTabsEl.querySelectorAll('.filter-btn').forEach(b =>
+                        b.classList.toggle('active', b.dataset.tab === 'pending'));
                     renderAdmin();
                 } catch (err) {
                     adminLoginError.textContent = err.message;
@@ -3135,14 +3266,24 @@
 
             function adminLogout(silent) {
                 adminToken = null;
+                adminRole = null;
+                adminIdentity = '';
                 sessionStorage.removeItem('adminToken');
+                sessionStorage.removeItem('adminRole');
+                sessionStorage.removeItem('adminIdentity');
                 if (!silent) toast('已退出后台');
                 renderAdmin();
             }
 
-            async function loadAdminList() {
+            function loadAdminList() {
+                if (adminTab === 'audit') return loadAudit();
+                if (adminTab === 'reviewers') return loadReviewers();
+                if (adminTab === 'members') return loadAdminMembers();
+                return loadSubmissions();
+            }
+
+            async function loadSubmissions() {
                 const seq = ++adminListReqSeq;
-                if (adminTab === 'members') return loadAdminMembers(seq);
                 adminListEl.innerHTML = '<div class="state-box"><div class="spinner"></div><p>加载中…</p></div>';
                 try {
                     const list = await apiFetch('/admin/submissions?status=' + adminTab, { token: adminToken });
@@ -3150,29 +3291,27 @@
                     renderSubmissionList(list);
                 } catch (err) {
                     if (seq !== adminListReqSeq) return;
-                    if (isAuthErr(err)) {
-                        adminLogout(true);
-                        toast(err.message, 'error');
-                        return;
-                    }
+                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
                     adminListEl.innerHTML = '<div class="state-box"><p>' + esc(err.message) + '</p></div>';
                 }
             }
 
             function renderSubmissionList(list) {
                 if (!list.length) {
-                    const tips = { pending: '暂无待审核的提交', approved: '暂无已通过的记录', rejected: '暂无已驳回的记录' };
+                    const tips = { pending: '暂无待审核的建议', approved: '暂无已通过的记录', rejected: '暂无已驳回的记录' };
                     adminListEl.innerHTML = '<div class="empty-state"><p>' + tips[adminTab] + '</p></div>';
                     return;
                 }
                 adminListEl.innerHTML = list.map(sub => {
-                    const rows = Object.keys(sub.changes).map(k =>
-                        '<tr>' +
-                        '<td>' + esc(FIELD_LABELS[k] || k) + '</td>' +
-                        '<td class="diff-old">' + esc(formatVal(k, sub.oldData ? sub.oldData[k] : undefined)) + '</td>' +
-                        '<td class="diff-new">' + esc(formatVal(k, sub.changes[k])) + '</td>' +
-                        '</tr>'
-                    ).join('');
+                    const isCreate = sub.type === 'create';
+                    const rows = Object.keys(sub.changes).map(k => {
+                        const oldV = isCreate ? '（新增）' : formatVal(k, sub.oldData ? sub.oldData[k] : undefined);
+                        return '<tr>' +
+                            '<td>' + esc(FIELD_LABELS[k] || k) + '</td>' +
+                            '<td class="diff-old">' + esc(oldV) + '</td>' +
+                            '<td class="diff-new">' + esc(formatVal(k, sub.changes[k])) + '</td>' +
+                            '</tr>';
+                    }).join('');
 
                     const reasonHtml = (sub.status === 'rejected' && sub.reason)
                         ? '<div class="sub-reason">驳回理由：' + esc(sub.reason) + '</div>'
@@ -3193,16 +3332,20 @@
                     } else {
                         actionsHtml = '<div class="sub-actions"><span class="badge-status st-' + sub.status + '">' +
                             (sub.status === 'approved' ? '已通过' : '已驳回') +
-                            '</span><span style="font-size:12px;color:#9aa6b5;">' + esc(fmtTime(sub.reviewedAt)) + '</span></div>';
+                            '</span><span style="font-size:12px;color:#9aa6b5;">' +
+                            esc(fmtTime(sub.reviewedAt)) + (sub.reviewedBy ? ' · ' + esc(sub.reviewedBy) : '') +
+                            '</span></div>';
                     }
 
-                    // ★ 不显示提交人真实姓名（只进不出），
-                    //   以「已实名验证」徽章代替
+                    const targetName = sub.memberName || (sub.changes && sub.changes.name) || '（未知）';
+                    const targetUser = sub.memberUsername || (sub.changes && sub.changes.username) || '';
                     return '<div class="sub-card" data-sub-id="' + sub.id + '">' +
                         '<div class="sub-meta">' +
-                        '<span>目标成员：<b>' + esc(sub.memberName) + '</b>（ID ' + sub.memberId + '）</span>' +
+                        '<span class="type-chip type-' + (isCreate ? 'create' : 'update') + '">' +
+                        (isCreate ? '新增' : '修改') + '</span>' +
+                        '<span>目标：<b>' + esc(targetName) + '</b>' + (targetUser ? ' @' + esc(targetUser) : '') +
+                        (isCreate ? '' : '（#' + esc(sub.memberId) + '）') + '</span>' +
                         '<span>提交时间：' + esc(fmtTime(sub.createdAt)) + '</span>' +
-                        (sub.verifiedByRealName ? '<span class="verify-chip">✓ 已实名验证</span>' : '') +
                         '</div>' +
                         '<table class="diff-table">' +
                         '<thead><tr><th style="width:80px">字段</th><th>当前值</th><th>修改为</th></tr></thead>' +
@@ -3214,9 +3357,101 @@
                 }).join('');
             }
 
-            /* ===== 后台 · 成员管理列表 ===== */
-            async function loadAdminMembers(seq) {
-                if (seq === undefined) seq = ++adminListReqSeq;
+            /* ===== 后台 · 审核记录 ===== */
+            const AUDIT_LABELS = {
+                login: '登录', approve: '通过建议', reject: '驳回建议',
+                add_reviewer: '新增审核员', update_reviewer: '修改审核员', delete_reviewer: '删除审核员',
+                create_member: '新增条目', update_member: '修改条目', delete_member: '删除条目'
+            };
+            async function loadAudit() {
+                const seq = ++adminListReqSeq;
+                adminListEl.innerHTML = '<div class="state-box"><div class="spinner"></div><p>加载中…</p></div>';
+                try {
+                    const list = await apiFetch('/admin/audit?limit=200', { token: adminToken });
+                    if (seq !== adminListReqSeq) return;
+                    renderAudit(list);
+                } catch (err) {
+                    if (seq !== adminListReqSeq) return;
+                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
+                    adminListEl.innerHTML = '<div class="state-box"><p>' + esc(err.message) + '</p></div>';
+                }
+            }
+            function renderAudit(list) {
+                if (!list.length) {
+                    adminListEl.innerHTML = '<div class="empty-state"><p>暂无审核记录</p></div>';
+                    return;
+                }
+                adminListEl.innerHTML = '<div class="audit-list">' + list.map(a =>
+                    '<div class="audit-row">' +
+                    '<span class="audit-actor">' + esc(a.actor || '（未知）') + '</span>' +
+                    '<span class="audit-role">' + esc(roleLabel(a.actorRole)) + '</span>' +
+                    '<span class="audit-action">' + esc(AUDIT_LABELS[a.action] || a.action) +
+                    (a.target ? '：' + esc(a.target) : '') + '</span>' +
+                    (a.detail ? '<span class="audit-detail">' + esc(a.detail) + '</span>' : '') +
+                    '<span class="audit-time">' + esc(fmtTime(a.createdAt)) + '</span>' +
+                    '</div>'
+                ).join('') + '</div>';
+            }
+
+            /* ===== 后台 · 审核员管理 ===== */
+            async function loadReviewers() {
+                const seq = ++adminListReqSeq;
+                adminListEl.innerHTML = '<div class="state-box"><div class="spinner"></div><p>加载中…</p></div>';
+                try {
+                    adminReviewersCache = await apiFetch('/admin/reviewers', { token: adminToken });
+                    if (seq !== adminListReqSeq) return;
+                    renderReviewers(adminReviewersCache);
+                } catch (err) {
+                    if (seq !== adminListReqSeq) return;
+                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
+                    adminListEl.innerHTML = '<div class="state-box"><p>' + esc(err.message) + '</p></div>';
+                }
+            }
+            function renderReviewers(list) {
+                let html =
+                    '<div class="reviewer-form">' +
+                    '<div class="form-row"><label>审核员名称</label>' +
+                    '<input type="text" id="rvNewName" placeholder="如 审核员甲" /></div>' +
+                    '<div class="form-row"><label>登录密码</label>' +
+                    '<input type="password" id="rvNewPassword" placeholder="至少 6 位" /></div>' +
+                    '<button class="btn-primary" data-action="r-add">＋ 添加审核员</button>' +
+                    '</div>';
+                if (!list.length) {
+                    html += '<div class="empty-state"><p>暂无审核员，可在上方添加</p></div>';
+                } else {
+                    list.forEach(r => {
+                        html +=
+                            '<div class="reviewer-card" data-reviewer-id="' + r.id + '">' +
+                            '<div class="reviewer-info">' +
+                            '<div class="reviewer-name">' + esc(r.name) + '</div>' +
+                            '<div class="reviewer-sub">创建于 ' + esc(fmtTime(r.createdAt)) + '</div>' +
+                            '</div>' +
+                            '<div class="reviewer-actions">' +
+                            '<button class="btn-ghost" data-action="r-edit">编辑</button>' +
+                            '<button class="btn-reject" data-action="r-del">删除</button>' +
+                            '</div>' +
+                            '<div class="reviewer-form" hidden style="flex-basis:100%;">' +
+                            '<div class="form-row"><label>名称</label>' +
+                            '<input type="text" class="rv-name" value="' + esc(r.name) + '" /></div>' +
+                            '<div class="form-row"><label>新密码（留空不改）</label>' +
+                            '<input type="password" class="rv-password" placeholder="至少 6 位" /></div>' +
+                            '<button class="btn-primary" data-action="r-save">保存</button>' +
+                            '<button class="btn-ghost" data-action="r-cancel">取消</button>' +
+                            '</div>' +
+                            '<div class="reviewer-del-box" hidden style="flex-basis:100%;">' +
+                            '<span class="ma-del-text">确定删除审核员 <b>' + esc(r.name) + '</b>？其登录会话将立即失效。</span>' +
+                            '<button class="btn-reject" data-action="r-del-confirm">确认删除</button>' +
+                            '<button class="btn-ghost" data-action="r-del-cancel">取消</button>' +
+                            '</div>' +
+                            '</div>';
+                    });
+                }
+                adminListEl.innerHTML = html;
+            }
+
+            /* ===== 后台 · 条目管理 ===== */
+            async function loadAdminMembers() {
+                const seq = ++adminListReqSeq;
                 adminListEl.innerHTML = '<div class="state-box"><div class="spinner"></div><p>加载中…</p></div>';
                 try {
                     adminMembersCache = await apiFetch('/admin/members', { token: adminToken });
@@ -3224,11 +3459,7 @@
                     renderAdminMembers(adminMembersCache);
                 } catch (err) {
                     if (seq !== adminListReqSeq) return;
-                    if (isAuthErr(err)) {
-                        adminLogout(true);
-                        toast(err.message, 'error');
-                        return;
-                    }
+                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
                     adminMembersCache = [];
                     adminListEl.innerHTML = '<div class="state-box"><p>' + esc(err.message) + '</p></div>';
                 }
@@ -3236,15 +3467,14 @@
 
             function renderAdminMembers(list) {
                 const sorted = list.slice().sort((a, b) =>
-                    String(b.generation || '').localeCompare(String(a.generation || '')) || (a.id - b.id)
+                    String(b.crashDate || '').localeCompare(String(a.crashDate || '')) || (a.id - b.id)
                 );
                 let html = '<div class="ma-toolbar">' +
-                    '<span class="ma-count">共 ' + list.length + ' 位成员</span>' +
-                    '<button class="btn-primary" data-action="m-add">＋ 添加成员</button>' +
-                    '<button class="btn-ghost" data-action="m-batch">⇪ 批量导入</button>' +
+                    '<span class="ma-count">共 ' + list.length + ' 条记录</span>' +
+                    '<button class="btn-primary" data-action="m-add">＋ 添加条目</button>' +
                     '</div>';
                 if (!list.length) {
-                    html += '<div class="empty-state"><p>暂无成员，点击右上角「添加成员」创建</p></div>';
+                    html += '<div class="empty-state"><p>暂无条目，点击右上角「添加条目」创建</p></div>';
                 } else {
                     sorted.forEach(m => {
                         const avatarContent = m.avatar
@@ -3255,14 +3485,14 @@
                             '<div class="ma-avatar">' + avatarContent + '</div>' +
                             '<div class="ma-info">' +
                             '<div class="ma-name">' + esc(m.name) + '<span class="ma-id">#' + m.id + '</span></div>' +
-                            '<div class="ma-sub">' + esc(m.generation) + ' 届 · ' + esc(m.role || '未设置职位') + '</div>' +
+                            '<div class="ma-sub">@' + esc(m.username || '') + ' · ' + esc(m.crashDate || '') + '</div>' +
                             '</div>' +
                             '<div class="ma-actions">' +
                             '<button class="btn-ghost" data-action="m-edit" data-id="' + m.id + '">编辑</button>' +
                             '<button class="btn-reject" data-action="m-del" data-id="' + m.id + '">删除</button>' +
                             '</div>' +
                             '<div class="ma-del-box" hidden>' +
-                            '<span class="ma-del-text">确定删除 <b>' + esc(m.name) + '</b> ？此操作不可恢复，其待审核提交将自动作废。</span>' +
+                            '<span class="ma-del-text">确定删除 <b>' + esc(m.name) + '</b> ？此操作不可恢复，其待审核建议将自动作废。</span>' +
                             '<button class="btn-reject" data-action="m-del-confirm" data-id="' + m.id + '">确认删除</button>' +
                             '<button class="btn-ghost" data-action="m-del-cancel">取消</button>' +
                             '</div>' +
@@ -3275,9 +3505,58 @@
             async function handleMemberDelete(id) {
                 try {
                     await apiFetch('/admin/members/' + id, { method: 'DELETE', token: adminToken });
-                    toast('成员已删除', 'success');
+                    toast('条目已删除', 'success');
                     mainNeedsReload = true;
                     loadAdminMembers();
+                } catch (err) {
+                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
+                    toast(err.message, 'error');
+                }
+            }
+
+            async function handleReviewerAdd() {
+                const nameEl = $('rvNewName');
+                const pwEl = $('rvNewPassword');
+                const name = nameEl ? nameEl.value.trim() : '';
+                const password = pwEl ? pwEl.value : '';
+                if (!name) { toast('请填写审核员名称', 'error'); return; }
+                if (password.length < 6) { toast('密码至少 6 位', 'error'); return; }
+                try {
+                    await apiFetch('/admin/reviewers', { method: 'POST', body: { name, password }, token: adminToken });
+                    toast('审核员已添加', 'success');
+                    loadReviewers();
+                } catch (err) {
+                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
+                    toast(err.message, 'error');
+                }
+            }
+
+            async function handleReviewerSave(id, card) {
+                const nameEl = card.querySelector('.rv-name');
+                const pwEl = card.querySelector('.rv-password');
+                const name = nameEl ? nameEl.value.trim() : '';
+                const password = pwEl ? pwEl.value : '';
+                if (!name) { toast('名称不能为空', 'error'); return; }
+                const body = { name };
+                if (password) {
+                    if (password.length < 6) { toast('密码至少 6 位', 'error'); return; }
+                    body.password = password;
+                }
+                try {
+                    await apiFetch('/admin/reviewers/' + id, { method: 'PUT', body, token: adminToken });
+                    toast('已保存', 'success');
+                    loadReviewers();
+                } catch (err) {
+                    if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
+                    toast(err.message, 'error');
+                }
+            }
+
+            async function handleReviewerDelete(id) {
+                try {
+                    await apiFetch('/admin/reviewers/' + id, { method: 'DELETE', token: adminToken });
+                    toast('审核员已删除', 'success');
+                    loadReviewers();
                 } catch (err) {
                     if (isAuthErr(err)) { adminLogout(true); toast(err.message, 'error'); return; }
                     toast(err.message, 'error');
@@ -3368,8 +3647,8 @@
                 if (isExpanded) closeExpand();
             });
 
-            /* --- 前台编辑模态 --- */
-            editOpenBtn.addEventListener('click', () => openEditModal(null));
+            /* --- 前台提交建议模态 --- */
+            addOpenBtn.addEventListener('click', () => openEditModal(null));
             expandEditBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 if (currentMemberId != null) openEditModal(currentMemberId);
@@ -3381,19 +3660,10 @@
                 if (editModal._downOnSelf && e.target === this) closeEditModal();
             });
             editModalClose.addEventListener('click', closeEditModal);
-            verifySubmitBtn.addEventListener('click', handleVerifySubmit);
-            verifyNameInput.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') handleVerifySubmit();
-            });
-            efAddSocial.addEventListener('click', () => addSocialRowTo(efSocialRows, '', ''));
-            editBackBtn.addEventListener('click', () => {
-                editStepForm.hidden = true;
-                editStepVerify.hidden = false;
-                verifyError.textContent = '';
-            });
+            editCancelBtn.addEventListener('click', closeEditModal);
             editSubmitBtn.addEventListener('click', handleEditSubmit);
 
-            /* --- 后台成员模态 --- */
+            /* --- 后台条目模态 --- */
             memberModal.addEventListener('mousedown', function (e) {
                 memberModal._downOnSelf = (e.target === this);
             });
@@ -3402,19 +3672,7 @@
             });
             memberModalClose.addEventListener('click', closeMemberModal);
             memberCancelBtn.addEventListener('click', closeMemberModal);
-            mfAddSocial.addEventListener('click', () => addSocialRowTo(mfSocialRows, '', ''));
             memberSaveBtn.addEventListener('click', handleMemberSave);
-
-            /* --- 后台批量导入模态 --- */
-            batchModal.addEventListener('mousedown', function (e) {
-                batchModal._downOnSelf = (e.target === this);
-            });
-            batchModal.addEventListener('mouseup', function (e) {
-                if (batchModal._downOnSelf && e.target === this) closeBatchModal();
-            });
-            batchModalClose.addEventListener('click', closeBatchModal);
-            batchCancelBtn.addEventListener('click', closeBatchModal);
-            batchImportBtn.addEventListener('click', handleBatchImport);
 
             /* --- 后台登录 --- */
             adminLoginBtn.addEventListener('click', doAdminLogin);
@@ -3427,18 +3685,19 @@
             adminTabsEl.addEventListener('click', function (e) {
                 const btn = e.target.closest('[data-tab]');
                 if (!btn) return;
+                if (btn.dataset.super && adminRole !== 'super') return;
                 adminTab = btn.dataset.tab;
                 adminTabsEl.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b === btn));
                 loadAdminList();
             });
 
-            /* --- 后台列表（审核 + 成员管理）统一事件委托 --- */
+            /* --- 后台列表统一事件委托 --- */
             adminListEl.addEventListener('click', async function (e) {
                 const btn = e.target.closest('[data-action]');
                 if (!btn) return;
                 const action = btn.dataset.action;
 
-                /* 审核动作 */
+                /* 建议审核 */
                 if (action === 'show-reject' || action === 'cancel-reject' || action === 'approve' || action === 'reject') {
                     const card = btn.closest('[data-sub-id]');
                     if (!card) return;
@@ -3454,7 +3713,7 @@
                         btn.disabled = true;
                         try {
                             await apiFetch('/admin/submissions/' + id + '/approve', { method: 'POST', token: adminToken });
-                            toast('已通过，资料生效', 'success');
+                            toast('已通过，条目已更新', 'success');
                             mainNeedsReload = true;
                             loadAdminList();
                         } catch (err) {
@@ -3484,11 +3743,9 @@
                     return;
                 }
 
-                /* 成员管理动作 */
+                /* 条目管理 */
                 if (action === 'm-add') {
                     openMemberModal('add');
-                } else if (action === 'm-batch') {
-                    openBatchModal();
                 } else if (action === 'm-edit') {
                     const id = Number(btn.dataset.id);
                     const m = adminMembersCache.find(x => x.id === id);
@@ -3502,9 +3759,37 @@
                     const box = card && card.querySelector('.ma-del-box');
                     if (box) box.hidden = true;
                 } else if (action === 'm-del-confirm') {
-                    const id = Number(btn.dataset.id);
                     btn.disabled = true;
-                    await handleMemberDelete(id);
+                    await handleMemberDelete(Number(btn.dataset.id));
+                    return;
+                }
+
+                /* 审核员管理 */
+                if (action === 'r-add') {
+                    await handleReviewerAdd();
+                } else if (action === 'r-edit') {
+                    const card = btn.closest('[data-reviewer-id]');
+                    const box = card && card.querySelector('.reviewer-form');
+                    if (box) box.hidden = false;
+                } else if (action === 'r-cancel') {
+                    const card = btn.closest('[data-reviewer-id]');
+                    const box = card && card.querySelector('.reviewer-form');
+                    if (box) box.hidden = true;
+                } else if (action === 'r-save') {
+                    const card = btn.closest('[data-reviewer-id]');
+                    if (card) await handleReviewerSave(Number(card.dataset.reviewerId), card);
+                } else if (action === 'r-del') {
+                    const card = btn.closest('[data-reviewer-id]');
+                    const box = card && card.querySelector('.reviewer-del-box');
+                    if (box) box.hidden = false;
+                } else if (action === 'r-del-cancel') {
+                    const card = btn.closest('[data-reviewer-id]');
+                    const box = card && card.querySelector('.reviewer-del-box');
+                    if (box) box.hidden = true;
+                } else if (action === 'r-del-confirm') {
+                    const card = btn.closest('[data-reviewer-id]');
+                    btn.disabled = true;
+                    if (card) await handleReviewerDelete(Number(card.dataset.reviewerId));
                 }
             });
 
@@ -3555,7 +3840,16 @@
             /* ============================================================
                初始化
                ============================================================ */
+            async function loadConfig() {
+                try {
+                    appConfig = await apiFetch('/config');
+                } catch (e) {
+                    appConfig = { turnstileEnabled: false, turnstileSiteKey: '' };
+                }
+            }
+
             window.addEventListener('hashchange', route);
+            loadConfig();
             route();
             loadMembers();
 

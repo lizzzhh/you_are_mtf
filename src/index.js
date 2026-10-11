@@ -1,21 +1,21 @@
 /**
- * 星轨社团成员时间线系统 · 后端实现
- * Cloudflare Workers + D1。任何行为冲突以《API 文档》为准。
+ * X友跨翻车列表 · 后端实现
+ * Cloudflare Workers + D1。所有响应统一为 { ok, data|error }。
+ *
+ * 角色模型：
+ *   - 游客（任何人）：查看列表；提交「新增条目 / 修改条目」建议（需 Cloudflare Turnstile）
+ *   - 审核员：密码登录，阅读建议并审核（通过 / 驳回）
+ *   - 超级管理员：额外可查看审核记录、管理审核员列表、直接管理条目
  */
 
-/* =============== 常量（对应文档约定） =============== */
-const WHITELIST_FIELDS = [
-  "name",
-  "generation",
-  "role",
-  "bio",
-  "avatar",
-  "tags",
-  "social",
-]; // §4.3 白名单
-const VERIFY_TTL_MS = 5 * 60 * 1000; // verifyToken 有效期 5 分钟（§2.3）
-const SESSION_TTL_MS = 2 * 3600 * 1000; // adminToken 有效期 2 小时（§2.3）
-const MAX_BODY_BYTES = 64 * 1024; // 请求体上限 64KB（§6.4）
+/* =============== 常量 =============== */
+const WHITELIST_FIELDS = ["username", "name", "crashDate", "bio", "avatar", "tags"];
+const CORE_FIELDS = ["username", "name", "crashDate"]; // 新增条目时必填
+const FIELD_LABELS = { username: "用户名", name: "昵称", crashDate: "翻车日期" };
+const SESSION_TTL_MS = 2 * 3600 * 1000; // 管理会话 2 小时
+const MAX_BODY_BYTES = 64 * 1024; // 请求体上限 64KB
+const TURNSTILE_VERIFY_URL =
+  "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +25,7 @@ const CORS = {
 
 const ENCODER = new TextEncoder();
 
-/* =============== 统一响应包（§2.1） =============== */
+/* =============== 统一响应包 =============== */
 class ApiError extends Error {
   constructor(code, message, status) {
     super(message);
@@ -44,38 +44,26 @@ const ERR = (code, message, status) =>
   jsonRes({ ok: false, error: { code, message } }, status);
 const nowISO = () => new Date().toISOString();
 
-/* =============== 加密工具（§6.1 双列存储） =============== */
+/* =============== 密码学工具 =============== */
 
-/** 确定性哈希：SHA-256(realName + SERVER_PEPPER)，建唯一索引做查重/查找 */
-async function sha256Lookup(env, realName) {
-  const pepper = env.SERVER_PEPPER || ""; // 生产环境必须通过 wrangler secret put 配置
-  const buf = await crypto.subtle.digest(
-    "SHA-256",
-    ENCODER.encode(realName + pepper),
-  );
-  return [...new Uint8Array(buf)]
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-/** 慢哈希替代 argon2id：PBKDF2-SHA256（Web Crypto 内置可用）。格式：pbkdf2$轮数$盐$摘要 */
-async function pbkdf2Hash(realName, iterations = 100000) {
+/** 慢哈希（审核员密码）：PBKDF2-SHA256。格式：pbkdf2$轮数$盐$摘要 */
+async function pbkdf2Hash(secret, iterations = 100000) {
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const bits = await deriveBits(realName, salt, iterations);
-  const hex = toHex(bits),
-    saltHex = toHex(salt);
-  return `pbkdf2$${iterations}$${saltHex}$${hex}`;
+  const bits = await deriveBits(secret, salt, iterations);
+  return `pbkdf2$${iterations}$${toHex(salt)}$${toHex(bits)}`;
 }
-async function pbkdf2Verify(realName, stored) {
+async function pbkdf2Verify(secret, stored) {
   const parts = String(stored || "").split("$");
   if (parts.length !== 4 || parts[0] !== "pbkdf2") return false;
   const [, iterStr, saltHex, expected] = parts;
-  const salt = new Uint8Array(saltHex.match(/../g).map((h) => parseInt(h, 16)));
-  const bits = await deriveBits(
-    realName,
-    salt,
-    parseInt(iterStr, 10) || 100000,
-  );
+  let salt;
+  try {
+    salt = new Uint8Array(saltHex.match(/../g).map((h) => parseInt(h, 16)));
+  } catch {
+    return false;
+  }
+  const iter = parseInt(iterStr, 10) || 100000;
+  const bits = await deriveBits(secret, salt, iter);
   return timingSafeEqual(toHex(bits), expected); // 恒时比较
 }
 async function deriveBits(str, saltBuf, iterations) {
@@ -117,7 +105,7 @@ function isHttpUrl(u) {
     return false;
   }
 }
-/** 服务端 URL 规范化（§3.2）：补全无协议前缀的链接为 https:// */
+/** 服务端 URL 规范化：补全无协议前缀的链接为 https:// */
 function normUrl(u) {
   const t = String(u || "").trim();
   if (!t) return "";
@@ -131,16 +119,59 @@ function validUrlField(u) {
   return isHttpUrl(u) || !/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(String(u).trim());
 }
 
-/** 字段值校验（提交与管理端共用）；违规抛 ApiError */
+/** 规范化 X 用户名：去除 @、URL 前缀、路径与查询，统一小写 */
+function normalizeUsername(raw) {
+  let s = String(raw ?? "").trim();
+  if (!s) return "";
+  s = s.replace(/^https?:\/\//i, "").replace(/^www\./i, "");
+  const m = s.match(/^(?:x\.com|twitter\.com|mobile\.twitter\.com)\/([^/?#\s]+)/i);
+  if (m) s = m[1];
+  s = s.replace(/^@+/, "").replace(/[/?#].*$/, "");
+  return s.toLowerCase();
+}
+function isValidUsername(u) {
+  return /^[a-z0-9_]{1,15}$/.test(u);
+}
+function isValidDate(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(s + "T00:00:00Z");
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+function normalizeTags(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((t) => String(t ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+/** 字段值校验（提交与直接管理共用）；违规抛 ApiError。不负责必填检查。 */
 function validateFieldValues(o) {
-  if ("name" in o && (typeof o.name !== "string" || o.name.trim() === ""))
-    throw new ApiError("FIELD_INVALID", "昵称不能为空", 400);
-  if (
-    "generation" in o &&
-    (typeof o.generation !== "string" || o.generation.trim() === "")
-  )
-    throw new ApiError("FIELD_INVALID", "届别不能为空", 400);
-  for (const k of ["role", "bio", "avatar"]) {
+  if ("username" in o) {
+    if (typeof o.username !== "string")
+      throw new ApiError("FIELD_INVALID", "用户名格式不正确", 400);
+    const u = normalizeUsername(o.username);
+    if (!u || !isValidUsername(u))
+      throw new ApiError(
+        "FIELD_INVALID",
+        "用户名格式不正确（1-15 位字母、数字或下划线，可含 @）",
+        400,
+      );
+  }
+  if ("name" in o) {
+    if (typeof o.name !== "string" || o.name.trim() === "")
+      throw new ApiError("FIELD_INVALID", "昵称不能为空", 400);
+    if (o.name.trim().length > 32)
+      throw new ApiError("FIELD_INVALID", "昵称不能超过 32 个字符", 400);
+  }
+  if ("crashDate" in o) {
+    if (typeof o.crashDate !== "string" || !isValidDate(o.crashDate.trim()))
+      throw new ApiError(
+        "FIELD_INVALID",
+        "翻车日期格式应为 YYYY-MM-DD（如 2025-05-20）",
+        400,
+      );
+  }
+  for (const k of ["bio", "avatar"]) {
     if (k in o && typeof o[k] !== "string")
       throw new ApiError("FIELD_INVALID", `"${k}" 字段格式不正确`, 400);
   }
@@ -151,79 +182,77 @@ function validateFieldValues(o) {
       throw new ApiError("FIELD_INVALID", "标签格式不正确", 400);
     if (o.tags.length > 8)
       throw new ApiError("FIELD_INVALID", "标签最多 8 个", 400);
+    if (o.tags.some((t) => t.trim().length > 24))
+      throw new ApiError("FIELD_INVALID", "单个标签不能超过 24 个字符", 400);
   }
-  if ("social" in o) {
-    if (!Array.isArray(o.social))
-      throw new ApiError("FIELD_INVALID", "社交链接格式不正确", 400);
-    for (const s of o.social) {
-      if (
-        !s ||
-        typeof s !== "object" ||
-        !String(s.name || "").trim() ||
-        !String(s.url || "").trim()
-      )
+}
+
+/** 白名单 + 必填 + 类型校验（changes / member 直接管理共用） */
+function assertAllowedAndValid(obj, requireCore) {
+  if (typeof obj !== "object" || obj === null || Array.isArray(obj))
+    throw new ApiError("CHANGES_EMPTY", "提交内容格式不正确", 400);
+  const keys = Object.keys(obj);
+  if (keys.length === 0) throw new ApiError("CHANGES_EMPTY", "没有检测到修改内容", 400);
+  for (const k of keys) {
+    if (!WHITELIST_FIELDS.includes(k))
+      throw new ApiError("FIELD_FORBIDDEN", `字段 "${k}" 不允许提交`, 400);
+  }
+  if (requireCore) {
+    for (const f of CORE_FIELDS) {
+      if (!(f in obj) || String(obj[f] ?? "").trim() === "")
         throw new ApiError(
-          "FIELD_INVALID",
-          "社交链接的名称与网址均不能为空",
-          400,
-        );
-      if (!validUrlField(s.url))
-        throw new ApiError(
-          "FIELD_INVALID",
-          "社交链接必须使用 http/https 协议",
+          "FIELD_MISSING",
+          `缺少必填字段 ${FIELD_LABELS[f] || f}`,
           400,
         );
     }
-    if (o.social.length > 8)
-      throw new ApiError("FIELD_INVALID", "社交链接最多 8 条", 400);
   }
-}
-/** 用户提交流 changes 校验（§4.3）：先白名单再类型，失败不消耗令牌 */
-function validateChanges(changes) {
-  if (typeof changes !== "object" || changes === null || Array.isArray(changes))
-    throw new ApiError("CHANGES_EMPTY", "提交内容格式不正确", 400);
-  const keys = Object.keys(changes);
-  if (keys.length === 0)
-    throw new ApiError("CHANGES_EMPTY", "没有检测到修改内容", 400);
-  for (const k of keys) {
-    if (!WHITELIST_FIELDS.includes(k))
-      throw new ApiError("FIELD_FORBIDDEN", `字段 "${k}" 不允许提交修改`, 400);
-  }
-  validateFieldValues(changes);
-}
-/** social 数组写库前统一规范化 URL */
-function normalizeSocial(list) {
-  return (Array.isArray(list) ? list : []).map((s) => ({
-    name: String(s?.name || "").trim(),
-    url: normUrl(s?.url),
-  }));
+  validateFieldValues(obj);
 }
 
-/* =============== 行 <-> 对象序列化（输出一律不含 realName 相关字段） =============== */
+/** 提交内容校验：create 需含核心字段；update 应为字段子集 */
+function validateChanges(type, changes) {
+  assertAllowedAndValid(changes, type === "create");
+}
+
+/** 规范化后的存储对象（只保留白名单内出现过的字段） */
+function sanitizeChanges(changes) {
+  const out = {};
+  if ("username" in changes) out.username = normalizeUsername(changes.username);
+  if ("name" in changes) out.name = String(changes.name).trim();
+  if ("crashDate" in changes) out.crashDate = String(changes.crashDate).trim();
+  if ("bio" in changes) out.bio = String(changes.bio);
+  if ("avatar" in changes) out.avatar = normUrl(changes.avatar);
+  if ("tags" in changes) out.tags = normalizeTags(changes.tags);
+  return out;
+}
+
+/* =============== 行 <-> 对象序列化 =============== */
 function memberRowToObj(r) {
   return {
     id: r.id,
+    username: r.username,
     name: r.name,
-    generation: r.generation,
-    role: r.role || "",
+    crashDate: r.crash_date,
     bio: r.bio || "",
-    tags: JSON.parse(r.tags || "[]"),
-    social: JSON.parse(r.social || "[]"),
     avatar: r.avatar || "",
+    tags: JSON.parse(r.tags || "[]"),
   };
 }
 function submissionRowToObj(r) {
   return {
     id: r.id,
-    verifiedByRealName: !!r.verified_by_real_name,
-    memberId: r.member_id,
-    memberName: r.member_name,
+    type: r.type,
+    memberId: r.member_id ?? null,
+    memberName: r.member_name || "",
+    memberUsername: r.member_username || "",
     changes: JSON.parse(r.changes || "{}"),
     oldData: JSON.parse(r.old_data || "{}"),
     createdAt: r.created_at,
     status: r.status,
     reason: r.reason ?? null,
     reviewedAt: r.reviewed_at ?? null,
+    reviewedBy: r.reviewed_by ?? null,
   };
 }
 
@@ -251,7 +280,6 @@ async function readJson(request) {
 }
 
 async function assertRateLimit(env, ip, endpoint, max, windowMs) {
-  // §6.3
   const now = Date.now();
   await env.DB.prepare("DELETE FROM rate_limits WHERE endpoint=? AND ts<?")
     .bind(endpoint, now - windowMs)
@@ -268,192 +296,190 @@ async function assertRateLimit(env, ip, endpoint, max, windowMs) {
     .run();
 }
 
-/** 惰性清理过期令牌与会话 */
+/** 惰性清理过期会话 */
 async function cleanExpired(env) {
-  const now = Date.now();
-  await env.DB.batch([
-    env.DB.prepare("DELETE FROM verify_tokens WHERE expires_at<=?").bind(now),
-    env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at<=?").bind(now),
-  ]);
+  await env.DB.prepare("DELETE FROM admin_sessions WHERE expires_at<=?")
+    .bind(Date.now())
+    .run();
 }
 
-/** 管理员鉴权中间件（§2.2 / §2.3）：Bearer adminToken，查会话表，可吊销 */
+/** 管理鉴权：Bearer adminToken，查会话表，返回 { token, role, identity } */
 async function requireAdmin(env, request) {
   const h = request.headers.get("Authorization") || "";
   const m = /^Bearer\s+(.+)$/i.exec(h.trim());
   const token = m ? m[1].trim() : "";
   if (!token)
-    throw new ApiError(
-      "ADMIN_TOKEN_INVALID",
-      "未登录或登录已失效，请重新登录",
-      401,
-    );
+    throw new ApiError("ADMIN_TOKEN_INVALID", "未登录或登录已失效，请重新登录", 401);
   await cleanExpired(env);
   const row = await env.DB.prepare(
-    "SELECT token FROM admin_sessions WHERE token=? AND expires_at>?",
+    "SELECT token, role, identity FROM admin_sessions WHERE token=? AND expires_at>?",
   )
     .bind(token, Date.now())
     .first();
   if (!row)
-    throw new ApiError(
-      "ADMIN_TOKEN_INVALID",
-      "未登录或登录已失效，请重新登录",
-      401,
-    );
-  return token;
+    throw new ApiError("ADMIN_TOKEN_INVALID", "未登录或登录已失效，请重新登录", 401);
+  return row;
+}
+function assertSuper(session) {
+  if (!session || session.role !== "super")
+    throw new ApiError("FORBIDDEN", "该操作仅超级管理员可用", 403);
 }
 
-/* =============== 接口实现（对应文档 §4.x 编号注释） =============== */
-
-/* 4.1 GET /api/members */
-async function listMembers(env) {
-  const { results } = await env.DB.prepare(
-    "SELECT id,name,generation,role,bio,tags,social,avatar FROM members ORDER BY id",
-  ).all();
-  return OK(results.map(memberRowToObj)); // 空列表返回 [] 而非 null
-}
-
-/* 4.2 POST /api/verify-name */
-async function verifyName(env, request, ip) {
-  await assertRateLimit(env, ip, "verify-name", 5, 60_000); // 强制限流 5次/分钟/IP
-  const body = await readJson(request);
-  const realName =
-    typeof body.realName === "string" ? body.realName.trim() : "";
-  if (!realName) throw new ApiError("PARAM_MISSING", "请输入真实姓名", 400);
-  const wantedId = body.memberId == null ? null : Number(body.memberId);
-
-  // 明文只在本请求内存期间存在；双哈希校验（§6.1）
-  const lookup = await sha256Lookup(env, realName);
-  const row = await env.DB.prepare(
-    "SELECT * FROM members WHERE real_name_lookup=?",
-  )
-    .bind(lookup)
-    .first();
-  if (!row)
-    throw new ApiError("NAME_NOT_FOUND", "该姓名不在社团登记名单中", 401);
-  if (wantedId != null && row.id !== wantedId)
-    // memberId 匹配优先（防横向越权）
-    throw new ApiError("NAME_MISMATCH", "该姓名不属于所指定的成员", 403);
-  if (!(await pbkdf2Verify(realName, row.real_name_verify)))
-    throw new ApiError("NAME_NOT_FOUND", "该姓名不在社团登记名单中", 401);
-
-  const token = randomToken("vt_");
+/** 写入审核 / 审计记录 */
+async function audit(env, actor, role, action, target, detail) {
   await env.DB.prepare(
-    "INSERT INTO verify_tokens(token,member_id,expires_at) VALUES(?,?,?)",
+    "INSERT INTO audit_logs(actor,actor_role,action,target,detail,created_at) VALUES(?,?,?,?,?,?)",
   )
-    .bind(token, row.id, Date.now() + VERIFY_TTL_MS)
+    .bind(actor || "", role || "", action, target || "", detail || "", nowISO())
     .run();
+}
 
+/** Cloudflare Turnstile 校验；未配置 TURNSTILE_SECRET_KEY 时跳过（本地开发） */
+async function verifyTurnstile(env, token, ip) {
+  const secret = env.TURNSTILE_SECRET_KEY || "";
+  if (!secret) return;
+  const t = typeof token === "string" ? token.trim() : "";
+  if (!t)
+    throw new ApiError("TURNSTILE_FAILED", "请先完成人机验证", 400);
+  const form = new URLSearchParams({ secret, response: t });
+  if (ip && ip !== "unknown") form.set("remoteip", ip);
+  let data;
+  try {
+    const res = await fetch(TURNSTILE_VERIFY_URL, { method: "POST", body: form });
+    data = await res.json();
+  } catch {
+    throw new ApiError("TURNSTILE_FAILED", "人机验证服务暂不可用，请稍后重试", 502);
+  }
+  if (!data || data.success !== true)
+    throw new ApiError("TURNSTILE_FAILED", "人机验证失败，请重试", 400);
+}
+
+/* =============== 公开接口 =============== */
+
+/** GET /api/config —— 前端获取 Turnstile site key */
+async function getConfig(env) {
+  const enabled = !!env.TURNSTILE_SECRET_KEY;
   return OK({
-    memberId: row.id,
-    verifyToken: token,
-    member: memberRowToObj(row),
+    turnstileEnabled: enabled,
+    turnstileSiteKey: env.TURNSTILE_SITE_KEY || "",
   });
 }
 
-/* 4.3 POST /api/submissions */
-async function createSubmission(env, request, ip) {
-  await assertRateLimit(env, ip, "submissions", 10, 3600_000); // 10次/小时/IP
-  const body = await readJson(request);
-  const vToken = typeof body.verifyToken === "string" ? body.verifyToken : "";
-
-  // 先做校验类检查：此阶段失败不消耗令牌（§4.3 说明）
-  validateChanges(body.changes);
-  if (!vToken)
-    throw new ApiError(
-      "TOKEN_INVALID",
-      "身份凭证无效，请重新进行姓名验证",
-      401,
-    );
-
-  await cleanExpired(env);
-  const trow = await env.DB.prepare("SELECT * FROM verify_tokens WHERE token=?")
-    .bind(vToken)
-    .first();
-  if (!trow)
-    throw new ApiError(
-      "TOKEN_INVALID",
-      "身份凭证无效，请重新进行姓名验证",
-      401,
-    );
-  if (trow.expires_at <= Date.now())
-    throw new ApiError(
-      "TOKEN_EXPIRED",
-      "身份凭证已过期，请重新进行姓名验证",
-      401,
-    );
-
-  const mrow = await env.DB.prepare("SELECT * FROM members WHERE id=?")
-    .bind(trow.member_id)
-    .first();
-  if (!mrow) throw new ApiError("MEMBER_NOT_FOUND", "目标成员不存在", 404);
-
-  const cur = memberRowToObj(mrow);
-  const changes = body.changes;
-  const oldData = {}; // 提交时刻快照，仅含出现字段
-  for (const k of Object.keys(changes)) oldData[k] = cur[k];
-
-  // 服务端独立规范化 URL 后入库
-  const chgStore = { ...changes };
-  if ("avatar" in chgStore) chgStore.avatar = normUrl(chgStore.avatar);
-  if ("social" in chgStore) chgStore.social = normalizeSocial(chgStore.social);
-  const oldStore = { ...oldData };
-  if ("avatar" in oldStore) oldStore.avatar = normUrl(oldStore.avatar);
-  if ("social" in oldStore) oldStore.social = normalizeSocial(oldStore.social);
-
-  const rs = await env.DB.batch([
-    // 事务：销毁令牌 + 写入审核记录
-    env.DB.prepare("DELETE FROM verify_tokens WHERE token=?").bind(vToken),
-    env.DB.prepare(
-      `INSERT INTO submissions
-         (verified_by_real_name, member_id, member_name, changes, old_data, created_at, status)
-       VALUES (1, ?, ?, ?, ?, ?, 'pending')`,
-    ).bind(
-      mrow.id,
-      mrow.name,
-      JSON.stringify(chgStore),
-      JSON.stringify(oldStore),
-      nowISO(),
-    ),
-  ]);
-  return OK({ submissionId: rs[1].meta.last_row_id });
+/** GET /api/members */
+async function listMembers(env) {
+  const { results } = await env.DB.prepare(
+    "SELECT id,username,name,crash_date,bio,avatar,tags FROM members ORDER BY crash_date DESC, id DESC",
+  ).all();
+  return OK(results.map(memberRowToObj));
 }
 
-/* 4.4 POST /api/admin/login */
+/** POST /api/submissions —— 任何人提交新增 / 修改建议（需 Turnstile） */
+async function createSubmission(env, request, ip) {
+  await assertRateLimit(env, ip, "submissions", 10, 3600_000); // 10 次/小时/IP
+  const body = await readJson(request);
+  const type = body.type === "create" ? "create" : body.type === "update" ? "update" : null;
+  if (!type)
+    throw new ApiError("PARAM_MISSING", "type 必须为 create 或 update", 400);
+
+  await verifyTurnstile(env, body.turnstileToken, ip);
+  validateChanges(type, body.changes); // 校验失败不进入后续流程
+  const changes = sanitizeChanges(body.changes);
+
+  let memberId = null;
+  let memberName = "";
+  let memberUsername = "";
+  let oldData = {};
+
+  if (type === "create") {
+    memberName = changes.name;
+    memberUsername = changes.username;
+  } else {
+    const id = Number(body.memberId);
+    if (!id) throw new ApiError("PARAM_MISSING", "缺少 memberId", 400);
+    const mrow = await env.DB.prepare(
+      "SELECT id,username,name,crash_date,bio,avatar,tags FROM members WHERE id=?",
+    )
+      .bind(id)
+      .first();
+    if (!mrow) throw new ApiError("MEMBER_NOT_FOUND", "目标条目不存在", 404);
+    const cur = memberRowToObj(mrow);
+    memberId = cur.id;
+    memberName = cur.name;
+    memberUsername = cur.username;
+    for (const k of Object.keys(changes)) oldData[k] = cur[k]; // 提交时刻快照
+  }
+
+  const r = await env.DB.prepare(
+    `INSERT INTO submissions
+       (type, member_id, member_name, member_username, changes, old_data, created_at, status)
+     VALUES (?,?,?,?,?,?,?, 'pending')`,
+  )
+    .bind(
+      type,
+      memberId,
+      memberName,
+      memberUsername,
+      JSON.stringify(changes),
+      JSON.stringify(oldData),
+      nowISO(),
+    )
+    .run();
+  return OK({ submissionId: r.meta.last_row_id });
+}
+
+/* =============== 管理接口 =============== */
+
+/** POST /api/admin/login —— 统一密码登录，自动识别超级管理员 / 审核员 */
 async function adminLogin(env, request, ip) {
   await assertRateLimit(env, ip, "admin-login", 5, 60_000);
   const body = await readJson(request);
   const pw = typeof body.password === "string" ? body.password : "";
-  const expected = env.ADMIN_PASSWORD || "";
-  if (!expected)
-    throw new ApiError(
-      "INTERNAL_ERROR",
-      "服务端尚未配置管理密码（ADMIN_PASSWORD）",
-      500,
-    );
-  if (!pw || !timingSafeEqual(pw, expected))
-    throw new ApiError("PASSWORD_WRONG", "管理密码错误", 401);
+  if (!pw) throw new ApiError("PASSWORD_WRONG", "密码错误", 401);
+
+  let role = null;
+  let identity = null;
+
+  const superPw = env.ADMIN_PASSWORD || "";
+  if (superPw && timingSafeEqual(pw, superPw)) {
+    role = "super";
+    identity = "超级管理员";
+  } else {
+    const { results } = await env.DB.prepare(
+      "SELECT name,password_hash FROM reviewers ORDER BY id",
+    ).all();
+    for (const r of results) {
+      if (await pbkdf2Verify(pw, r.password_hash)) {
+        role = "reviewer";
+        identity = r.name;
+        break;
+      }
+    }
+  }
+  if (!role) throw new ApiError("PASSWORD_WRONG", "密码错误", 401);
 
   const token = randomToken("at_");
   await env.DB.prepare(
-    "INSERT INTO admin_sessions(token,expires_at) VALUES(?,?)",
+    "INSERT INTO admin_sessions(token,role,identity,expires_at) VALUES(?,?,?,?)",
   )
-    .bind(token, Date.now() + SESSION_TTL_MS)
+    .bind(token, role, identity, Date.now() + SESSION_TTL_MS)
     .run();
+  await audit(env, identity, role, "login", "", "");
   return OK({
     adminToken: token,
+    role,
+    identity,
     expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
   });
 }
 
-/* 4.5 GET /api/admin/submissions（附录速查表别名 GET /api/submissions 一并支持） */
+/** GET /api/admin/submissions */
 async function listSubmissions(env, url) {
   const status = url.searchParams.get("status") || "pending";
   const ALLOWED = ["pending", "approved", "rejected"];
-  if (!ALLOWED.includes(status)) return OK([]); // 固定行为：非法状态返回空数组（文档允许二选一）
+  if (!ALLOWED.includes(status)) return OK([]);
   const { results } = await env.DB.prepare(
-    `SELECT id,verified_by_real_name,member_id,member_name,changes,old_data,created_at,status,reason,reviewed_at
-       FROM submissions WHERE status=? ORDER BY created_at DESC`,
+    `SELECT id,type,member_id,member_name,member_username,changes,old_data,created_at,status,reason,reviewed_at,reviewed_by
+       FROM submissions WHERE status=? ORDER BY created_at DESC, id DESC`,
   )
     .bind(status)
     .all();
@@ -468,54 +494,89 @@ async function getSubmission(env, id) {
   return r;
 }
 
-/* 4.6 POST /api/admin/submissions/{id}/approve */
-async function approveSubmission(env, id) {
+/** 由规范化对象生成 members 的 SET 片段 */
+function memberPairs(obj) {
+  const cols = [];
+  const args = [];
+  for (const k of WHITELIST_FIELDS) {
+    if (!(k in obj)) continue;
+    if (k === "tags") {
+      cols.push("tags=?");
+      args.push(JSON.stringify(obj.tags));
+    } else if (k === "crashDate") {
+      cols.push("crash_date=?");
+      args.push(obj.crashDate);
+    } else {
+      cols.push(`${k}=?`);
+      args.push(obj[k]);
+    }
+  }
+  return { cols, args };
+}
+
+function insertMemberStmt(env, obj) {
+  return env.DB.prepare(
+    `INSERT INTO members (username,name,crash_date,bio,avatar,tags,created_at)
+     VALUES (?,?,?,?,?,?,?)`,
+  ).bind(
+    obj.username,
+    obj.name,
+    obj.crashDate,
+    obj.bio ?? "",
+    obj.avatar ?? "",
+    JSON.stringify(obj.tags ?? []),
+    nowISO(),
+  );
+}
+
+/** POST /api/admin/submissions/{id}/approve */
+async function approveSubmission(env, id, session) {
   const srow = await getSubmission(env, id);
   if (srow.status !== "pending")
     throw new ApiError("ALREADY_REVIEWED", "该审核记录已处理", 409);
-  const mrow = await env.DB.prepare("SELECT id FROM members WHERE id=?")
-    .bind(srow.member_id)
-    .first();
-  if (!mrow)
-    throw new ApiError(
-      "MEMBER_NOT_FOUND",
-      "目标成员已被删除，拒绝应用变更",
-      404,
-    );
 
-  const changes = JSON.parse(srow.changes || "{}");
-  const cols = [],
-    args = [];
-  for (const k of Object.keys(changes)) {
-    // last-write-wins，不做冲突检测（§5.2）
-    if (!WHITELIST_FIELDS.includes(k)) continue;
-    if (k === "tags" || k === "social") {
-      cols.push(`${k}=?`);
-      args.push(JSON.stringify(changes[k]));
-    } else {
-      cols.push(`${k}=?`);
-      args.push(changes[k]);
-    }
-  }
+  const raw = JSON.parse(srow.changes || "{}");
+  const changes = sanitizeChanges(raw);
+  const reviewedAt = nowISO();
+
   const stmts = [];
-  if (cols.length)
-    stmts.push(
-      env.DB.prepare(`UPDATE members SET ${cols.join(",")} WHERE id=?`).bind(
-        ...args,
-        srow.member_id,
-      ),
-    );
+  if (srow.type === "create") {
+    stmts.push(insertMemberStmt(env, changes));
+  } else {
+    const mrow = await env.DB.prepare("SELECT id FROM members WHERE id=?")
+      .bind(srow.member_id)
+      .first();
+    if (!mrow)
+      throw new ApiError("MEMBER_NOT_FOUND", "目标条目已被删除，拒绝应用变更", 404);
+    const { cols, args } = memberPairs(changes);
+    if (cols.length)
+      stmts.push(
+        env.DB.prepare(`UPDATE members SET ${cols.join(",")} WHERE id=?`).bind(
+          ...args,
+          srow.member_id,
+        ),
+      );
+  }
   stmts.push(
     env.DB.prepare(
-      "UPDATE submissions SET status='approved', reviewed_at=? WHERE id=?",
-    ).bind(nowISO(), id),
+      "UPDATE submissions SET status='approved', reviewed_at=?, reviewed_by=? WHERE id=?",
+    ).bind(reviewedAt, session.identity, id),
   );
   await env.DB.batch(stmts);
+
+  await audit(
+    env,
+    session.identity,
+    session.role,
+    "approve",
+    `${srow.type === "create" ? "新增" : "修改"} #${id} ${changes.name || srow.member_name}`,
+    JSON.stringify(changes),
+  );
   return OK({ applied: true });
 }
 
-/* 4.7 POST /api/admin/submissions/{id}/reject */
-async function rejectSubmission(env, request, id) {
+/** POST /api/admin/submissions/{id}/reject */
+async function rejectSubmission(env, request, id, session) {
   const body = await readJson(request);
   const reason = typeof body.reason === "string" ? body.reason.trim() : "";
   if (!reason)
@@ -526,234 +587,190 @@ async function rejectSubmission(env, request, id) {
     throw new ApiError("ALREADY_REVIEWED", "该审核记录已处理", 409);
 
   await env.DB.prepare(
-    "UPDATE submissions SET status='rejected', reason=?, reviewed_at=? WHERE id=?",
+    "UPDATE submissions SET status='rejected', reason=?, reviewed_at=?, reviewed_by=? WHERE id=?",
   )
-    .bind(reason, nowISO(), id)
-    .run(); // 不触碰成员数据
+    .bind(reason, nowISO(), session.identity, id)
+    .run();
+  await audit(
+    env,
+    session.identity,
+    session.role,
+    "reject",
+    `${srow.type === "create" ? "新增" : "修改"} #${id} ${srow.member_name}`,
+    reason,
+  );
   return OK({ applied: false });
 }
 
-/* 4.8 GET /api/admin/members */
-async function listMembersAdmin(env) {
+/* ---------- 超级管理员：审核员管理 ---------- */
+
+async function listReviewers(env) {
   const { results } = await env.DB.prepare(
-    "SELECT id,name,generation,role,bio,tags,social,avatar FROM members ORDER BY id",
+    "SELECT id,name,created_at FROM reviewers ORDER BY id",
   ).all();
-  return OK(results.map(memberRowToObj)); // 即使管理员也拿不到 realName（§3.4 只进不出）
+  return OK(results.map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at })));
 }
 
-/* 4.9 POST /api/admin/members —— 校验顺序按 §4.9 建议 */
-async function createMember(env, request) {
+async function createReviewer(env, request, session) {
   const body = await readJson(request);
-
-  // ① realName 非空
-  const realName = String(body.realName ?? "").trim();
-  if (!realName)
-    throw new ApiError("FIELD_MISSING", "缺少必填字段 realName", 400);
-  // ② realName 唯一
-  const lookup = await sha256Lookup(env, realName);
-  if (
-    await env.DB.prepare("SELECT id FROM members WHERE real_name_lookup=?")
-      .bind(lookup)
-      .first()
-  )
-    throw new ApiError("REALNAME_EXISTS", "该真实姓名已登记给其他成员", 409);
-  // ③④ name / generation 非空
-  if (String(body.name ?? "").trim() === "")
-    throw new ApiError("FIELD_MISSING", "缺少必填字段 name", 400);
-  if (String(body.generation ?? "").trim() === "")
-    throw new ApiError("FIELD_MISSING", "缺少必填字段 generation", 400);
-  // ⑤ 其余字段类型校验
-  validateFieldValues(body);
+  const name = String(body.name ?? "").trim();
+  const password = typeof body.password === "string" ? body.password : "";
+  if (!name) throw new ApiError("FIELD_MISSING", "缺少审核员名称", 400);
+  if (name.length > 32)
+    throw new ApiError("FIELD_INVALID", "审核员名称不能超过 32 个字符", 400);
+  if (password.length < 6)
+    throw new ApiError("FIELD_INVALID", "密码至少 6 位", 400);
+  const exists = await env.DB.prepare("SELECT id FROM reviewers WHERE name=?")
+    .bind(name)
+    .first();
+  if (exists) throw new ApiError("REVIEWER_EXISTS", "该名称已存在", 409);
 
   const r = await env.DB.prepare(
-    `INSERT INTO members
-       (real_name_lookup, real_name_verify, name, generation, role, bio, avatar, tags, social, created_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+    "INSERT INTO reviewers(name,password_hash,created_at) VALUES(?,?,?)",
   )
-    .bind(
-      lookup,
-      await pbkdf2Hash(realName),
-      String(body.name).trim(),
-      String(body.generation).trim(),
-      body.role ?? "",
-      body.bio ?? "",
-      normUrl(body.avatar ?? ""),
-      Array.isArray(body.tags) ? JSON.stringify(body.tags) : "[]",
-      JSON.stringify(normalizeSocial(body.social)),
-      nowISO(),
-    )
+    .bind(name, await pbkdf2Hash(password), nowISO())
     .run();
+  await audit(env, session.identity, session.role, "add_reviewer", name, "");
   return OK({ id: r.meta.last_row_id });
 }
 
-/* 4.9b POST /api/admin/members/batch —— 批量导入学生（§4.9 同款校验） */
-async function createMembersBatch(env, request) {
+async function updateReviewer(env, request, id, session) {
   const body = await readJson(request);
-  const items = Array.isArray(body && body.members) ? body.members : null;
-  if (!items || items.length === 0)
-    throw new ApiError("FIELD_MISSING", "缺少 members 数组或为空", 400);
-  if (items.length > 200)
-    throw new ApiError("FIELD_INVALID", "单次批量导入最多 200 条", 400);
-
-  const created = [];
-  const skipped = [];
-  const errors = [];
-  const seenLookup = new Set();
-  const inserts = [];
-
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i] || {};
-    const idx = i + 1;
-    const realName = String(item.realName ?? "").trim();
-    if (!realName) {
-      errors.push({ index: idx, code: "FIELD_MISSING", message: "缺少必填字段 realName" });
-      continue;
-    }
-    const name = String(item.name ?? "").trim();
-    const generation = String(item.generation ?? "").trim();
-    if (!name || !generation) {
-      errors.push({ index: idx, code: "FIELD_MISSING", message: "name / generation 必填" });
-      continue;
-    }
-    try {
-      validateFieldValues(item);
-    } catch (e) {
-      if (e instanceof ApiError) {
-        errors.push({ index: idx, code: e.code, message: e.message });
-        continue;
-      }
-      throw e;
-    }
-
-    const lookup = await sha256Lookup(env, realName);
-    if (seenLookup.has(lookup)) {
-      skipped.push({ index: idx, realName, reason: "DUPLICATE_IN_BATCH" });
-      continue;
-    }
-    const exists = await env.DB.prepare(
-      "SELECT id FROM members WHERE real_name_lookup=?",
-    )
-      .bind(lookup)
-      .first();
-    if (exists) {
-      skipped.push({ index: idx, realName, reason: "REALNAME_EXISTS" });
-      continue;
-    }
-
-    seenLookup.add(lookup);
-    inserts.push({
-      idx,
-      name,
-      stmt: env.DB.prepare(
-        `INSERT INTO members
-           (real_name_lookup, real_name_verify, name, generation, role, bio, avatar, tags, social, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      ).bind(
-        lookup,
-        await pbkdf2Hash(realName),
-        name,
-        generation,
-        item.role ?? "",
-        item.bio ?? "",
-        normUrl(item.avatar ?? ""),
-        Array.isArray(item.tags) ? JSON.stringify(item.tags) : "[]",
-        JSON.stringify(normalizeSocial(item.social)),
-        nowISO(),
-      ),
-    });
-  }
-
-  let rows = [];
-  if (inserts.length) rows = await env.DB.batch(inserts.map((o) => o.stmt));
-  inserts.forEach((o, i) => {
-    created.push({ index: o.idx, id: rows[i].meta.last_row_id, name: o.name });
-  });
-
-  return OK({ created, skipped, errors, total: items.length });
-}
-
-/* 4.10 PUT /api/admin/members/{id} —— 部分更新：缺省=不改；tags/social 整体替换（§3.2） */
-async function updateMember(env, request, id) {
-  const body = await readJson(request);
-  for (const k of Object.keys(body)) {
-    if (!WHITELIST_FIELDS.includes(k) && k !== "realName")
-      throw new ApiError(
-        "FIELD_FORBIDDEN",
-        `字段 "${k}" 不能通过该接口修改`,
-        400,
-      );
-  }
-  validateFieldValues(body); // name/generation 出现则必须非空等规则同样生效
-
-  const mrow = await env.DB.prepare("SELECT * FROM members WHERE id=?")
+  const row = await env.DB.prepare("SELECT id,name FROM reviewers WHERE id=?")
     .bind(id)
     .first();
-  if (!mrow) throw new ApiError("MEMBER_NOT_FOUND", "成员不存在", 404);
+  if (!row) throw new ApiError("REVIEWER_NOT_FOUND", "审核员不存在", 404);
 
-  const cols = [],
-    args = [];
-  // realName 特殊：缺省或空串=不变（无清除语义）；非空=覆盖登记，且需唯一性校验排除自身
-  const rnRaw = String(body.realName ?? "").trim();
-  const rnChange = "realName" in body && rnRaw !== "";
-  if (rnChange) {
-    const lookup = await sha256Lookup(env, rnRaw);
-    if (
-      await env.DB.prepare(
-        "SELECT id FROM members WHERE real_name_lookup=? AND id<>?",
-      )
-        .bind(lookup, id)
-        .first()
+  const cols = [];
+  const args = [];
+  if ("name" in body) {
+    const name = String(body.name ?? "").trim();
+    if (!name) throw new ApiError("FIELD_INVALID", "审核员名称不能为空", 400);
+    if (name.length > 32)
+      throw new ApiError("FIELD_INVALID", "审核员名称不能超过 32 个字符", 400);
+    const dup = await env.DB.prepare(
+      "SELECT id FROM reviewers WHERE name=? AND id<>?",
     )
-      throw new ApiError("REALNAME_EXISTS", "该真实姓名已登记给其他成员", 409);
+      .bind(name, id)
+      .first();
+    if (dup) throw new ApiError("REVIEWER_EXISTS", "该名称已存在", 409);
+    cols.push("name=?");
+    args.push(name);
   }
-
-  for (const k of WHITELIST_FIELDS) {
-    if (!(k in body)) continue;
-    if (k === "tags") {
-      cols.push("tags=?");
-      args.push(JSON.stringify(body.tags));
-    } else if (k === "social") {
-      cols.push("social=?");
-      args.push(JSON.stringify(normalizeSocial(body.social)));
-    } else if (k === "avatar") {
-      cols.push("avatar=?");
-      args.push(normUrl(body.avatar));
-    } else {
-      cols.push(`${k}=?`);
-      args.push(body[k]);
-    }
-  }
-  if (rnChange) {
-    // 旧哈希作废，此后须以新姓名验证
-    cols.push("real_name_lookup=?");
-    args.push(await sha256Lookup(env, rnRaw));
-    cols.push("real_name_verify=?");
-    args.push(await pbkdf2Hash(rnRaw));
+  if ("password" in body) {
+    const password = typeof body.password === "string" ? body.password : "";
+    if (password.length < 6)
+      throw new ApiError("FIELD_INVALID", "密码至少 6 位", 400);
+    cols.push("password_hash=?");
+    args.push(await pbkdf2Hash(password));
   }
   if (cols.length) {
-    // 完全无可改字段视为空操作，成功返回
+    await env.DB.prepare(`UPDATE reviewers SET ${cols.join(",")} WHERE id=?`)
+      .bind(...args, id)
+      .run();
+  }
+  await audit(
+    env,
+    session.identity,
+    session.role,
+    "update_reviewer",
+    row.name,
+    cols.length ? "已更新" : "无变更",
+  );
+  return OK({ updated: true });
+}
+
+async function deleteReviewer(env, id, session) {
+  const row = await env.DB.prepare("SELECT id,name FROM reviewers WHERE id=?")
+    .bind(id)
+    .first();
+  if (!row) throw new ApiError("REVIEWER_NOT_FOUND", "审核员不存在", 404);
+  await env.DB.batch([
+    env.DB.prepare("DELETE FROM reviewers WHERE id=?").bind(id),
+    // 同时吊销该审核员的会话
+    env.DB.prepare("DELETE FROM admin_sessions WHERE role='reviewer' AND identity=?")
+      .bind(row.name),
+  ]);
+  await audit(env, session.identity, session.role, "delete_reviewer", row.name, "");
+  return OK({ deleted: true });
+}
+
+/* ---------- 超级管理员：审核记录 ---------- */
+
+async function listAudit(env, url) {
+  let limit = parseInt(url.searchParams.get("limit") || "100", 10);
+  if (!Number.isFinite(limit) || limit <= 0) limit = 100;
+  limit = Math.min(limit, 500);
+  const { results } = await env.DB.prepare(
+    "SELECT id,actor,actor_role,action,target,detail,created_at FROM audit_logs ORDER BY id DESC LIMIT ?",
+  )
+    .bind(limit)
+    .all();
+  return OK(
+    results.map((r) => ({
+      id: r.id,
+      actor: r.actor,
+      actorRole: r.actor_role,
+      action: r.action,
+      target: r.target,
+      detail: r.detail,
+      createdAt: r.created_at,
+    })),
+  );
+}
+
+/* ---------- 超级管理员：条目直接管理（立即生效） ---------- */
+
+async function createMember(env, request, session) {
+  const body = await readJson(request);
+  assertAllowedAndValid(body, true);
+  const obj = sanitizeChanges(body);
+  const r = await insertMemberStmt(env, obj).run();
+  await audit(
+    env,
+    session.identity,
+    session.role,
+    "create_member",
+    obj.name,
+    obj.username,
+  );
+  return OK({ id: r.meta.last_row_id });
+}
+
+async function updateMember(env, request, id, session) {
+  const body = await readJson(request);
+  assertAllowedAndValid(body, false);
+  const mrow = await env.DB.prepare("SELECT id,name FROM members WHERE id=?")
+    .bind(id)
+    .first();
+  if (!mrow) throw new ApiError("MEMBER_NOT_FOUND", "条目不存在", 404);
+  const obj = sanitizeChanges(body);
+  const { cols, args } = memberPairs(obj);
+  if (cols.length) {
     await env.DB.prepare(`UPDATE members SET ${cols.join(",")} WHERE id=?`)
       .bind(...args, id)
       .run();
   }
+  await audit(env, session.identity, session.role, "update_member", mrow.name, "");
   return OK({ updated: true });
 }
 
-/* 4.11 DELETE /api/admin/members/{id} —— 原子级联：作废 pending（§4.11 / §5.2） */
-async function deleteMember(env, id) {
-  const mrow = await env.DB.prepare("SELECT id FROM members WHERE id=?")
+async function deleteMember(env, id, session) {
+  const mrow = await env.DB.prepare("SELECT id,name FROM members WHERE id=?")
     .bind(id)
     .first();
-  if (!mrow) throw new ApiError("MEMBER_NOT_FOUND", "成员不存在", 404); // 非幂等：重复删除 404
+  if (!mrow) throw new ApiError("MEMBER_NOT_FOUND", "条目不存在", 404);
 
   await env.DB.batch([
     env.DB.prepare(
       `UPDATE submissions
-          SET status='rejected', reason='目标成员已被删除，提交自动作废', reviewed_at=?
+          SET status='rejected', reason='目标条目已被删除，提交自动作废',
+              reviewed_at=?, reviewed_by=?
         WHERE member_id=? AND status='pending'`,
-    ).bind(nowISO(), id),
-    env.DB.prepare("DELETE FROM members WHERE id=?").bind(id), // 行删除即同时清除其姓名哈希，姓名释放
+    ).bind(nowISO(), session.identity, id),
+    env.DB.prepare("DELETE FROM members WHERE id=?").bind(id),
   ]);
+  await audit(env, session.identity, session.role, "delete_member", mrow.name, "");
   return OK({ deleted: true });
 }
 
@@ -766,28 +783,26 @@ export default {
 
       const url = new URL(request.url);
       const method = request.method.toUpperCase();
-      let p = url.pathname.replace(/\/+$/, "");
+      const p = url.pathname.replace(/\/+$/, "");
 
       if (p !== "/api" && !p.startsWith("/api/"))
         return ERR("NOT_FOUND", "Not Found", 404);
 
-      const seg = p.split("/").filter(Boolean); // 例：['api','admin','submissions','12','approve']
+      const seg = p.split("/").filter(Boolean); // ['api', ...]
       const ip = request.headers.get("CF-Connecting-IP") || "unknown";
 
       /* ---------- 公开接口 ---------- */
+      if (seg[1] === "config" && seg.length === 2 && method === "GET")
+        return await getConfig(env);
+
       if (seg[1] === "members" && seg.length === 2 && method === "GET")
         return await listMembers(env);
 
-      if (seg[1] === "verify-name" && seg.length === 2 && method === "POST")
-        return await verifyName(env, request, ip);
-
-      if (seg[1] === "submissions") {
-        if (seg.length === 2 && method === "POST")
-          return await createSubmission(env, request, ip);
-        if (seg.length === 2 && method === "GET") {
-          // 附录速查表中的管理端别名
-          await requireAdmin(env, request);
-          return await listSubmissions(env, url);
+      if (seg[1] === "submissions" && seg.length === 2) {
+        if (method === "POST") return await createSubmission(env, request, ip);
+        if (method === "GET") {
+          const session = await requireAdmin(env, request);
+          return await listSubmissions(env, url); // 兼容别名
         }
       }
 
@@ -796,28 +811,49 @@ export default {
         if (seg.length === 3 && seg[2] === "login" && method === "POST")
           return await adminLogin(env, request, ip);
 
-        await requireAdmin(env, request); // 其余 /admin/* 一律需要 Bearer adminToken
+        const session = await requireAdmin(env, request);
+
+        if (seg.length === 3 && seg[2] === "me" && method === "GET")
+          return OK({ role: session.role, identity: session.identity });
 
         if (seg[2] === "submissions") {
           if (seg.length === 3 && method === "GET")
             return await listSubmissions(env, url);
           if (seg.length === 5 && seg[4] === "approve" && method === "POST")
-            return await approveSubmission(env, Number(seg[3]));
+            return await approveSubmission(env, Number(seg[3]), session);
           if (seg.length === 5 && seg[4] === "reject" && method === "POST")
-            return await rejectSubmission(env, request, Number(seg[3]));
+            return await rejectSubmission(env, request, Number(seg[3]), session);
         }
-        if (seg[2] === "members") {
+
+        if (seg[2] === "audit") {
+          assertSuper(session);
           if (seg.length === 3 && method === "GET")
-            return await listMembersAdmin(env);
-          if (seg.length === 3 && method === "POST")
-            return await createMember(env, request);
-          if (seg.length === 4 && seg[3] === "batch" && method === "POST")
-            return await createMembersBatch(env, request);
-          if (seg.length === 4 && method === "PUT")
-            return await updateMember(env, request, Number(seg[3]));
-          if (seg.length === 4 && method === "DELETE")
-            return await deleteMember(env, Number(seg[3]));
+            return await listAudit(env, url);
         }
+
+        if (seg[2] === "reviewers") {
+          assertSuper(session);
+          if (seg.length === 3 && method === "GET")
+            return await listReviewers(env);
+          if (seg.length === 3 && method === "POST")
+            return await createReviewer(env, request, session);
+          if (seg.length === 4 && method === "PUT")
+            return await updateReviewer(env, request, Number(seg[3]), session);
+          if (seg.length === 4 && method === "DELETE")
+            return await deleteReviewer(env, Number(seg[3]), session);
+        }
+
+        if (seg[2] === "members") {
+          assertSuper(session);
+          if (seg.length === 3 && method === "GET") return await listMembers(env);
+          if (seg.length === 3 && method === "POST")
+            return await createMember(env, request, session);
+          if (seg.length === 4 && method === "PUT")
+            return await updateMember(env, request, Number(seg[3]), session);
+          if (seg.length === 4 && method === "DELETE")
+            return await deleteMember(env, Number(seg[3]), session);
+        }
+
         return ERR("NOT_FOUND", "Not Found", 404);
       }
 
